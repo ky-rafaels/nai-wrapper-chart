@@ -22,3 +22,11 @@ version: 0.1.0
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 appVersion: "1.16.0"
+dependencies:
+  - name: gateway-crds-helm
+    version: v1.5.1
+    repository: file://charts/gateway-crds-helm-v1.5.1.tgz
+  - name: gateway-helm
+    version: v1.5.1
+    repository: file://charts/gateway-helm-v1.5.1.tgz
+    # repository: oci://docker.io/envoyproxy/gateway-crds-helm

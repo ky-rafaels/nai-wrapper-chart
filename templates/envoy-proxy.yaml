@@ -1,0 +1,15 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: nai-envoyproxy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        pod:
+          imagePullSecrets:
+            {{ .Values.gateway-helm.global.imagePullSecrets }}
+        container:
+          image: {{ .Values.gateway-helm.global.images.naiProxy.image }}

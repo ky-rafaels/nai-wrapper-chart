@@ -1,0 +1,19 @@
+gateway-crds-helm:
+  crds:
+    gatewayAPI:
+      enabled: true
+    envoyGateway:
+      enabled: true
+gateway-helm:
+  global:
+    repo: harbor.example.com/
+    registry: nutanix
+    images:
+      envoyGateway:
+        image: nai-gateway:v1.5.0
+      naiProxy: 
+        image: nai-envoy:distroless-v1.35.0
+      ratelimit: 
+        image: nai-ratelimit:3e085e5b
+    imagePullSecrets:
+      - name: regcred
