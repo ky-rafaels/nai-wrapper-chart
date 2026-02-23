@@ -1,19 +1,28 @@
-gateway-crds-helm:
+global:
+  repo: harbor.example.com/nutanix
+gatewayCrdsHelm:
   crds:
     gatewayAPI:
       enabled: true
     envoyGateway:
       enabled: true
-gateway-helm:
+gatewayHelm:
   global:
-    repo: harbor.example.com/
-    registry: nutanix
     images:
       envoyGateway:
-        image: nai-gateway:v1.5.0
+        image: "nai-gateway:v1.5.0"
       naiProxy: 
-        image: nai-envoy:distroless-v1.35.0
+        image: "nai-envoy:distroless-v1.35.0"
       ratelimit: 
-        image: nai-ratelimit:3e085e5b
+        image: "nai-ratelimit:3e085e5b"
+    imagePullSecrets:
+      - name: regcred
+kserve:
+  controller:
+    deploymentMode: RawDeployment
+    gateway:
+      disableIngressCreation: true
+    image: "nai-kserve-controller"
+    rbacProxyImage: "nai-kserve-rbac-proxy:v0.18.0"
     imagePullSecrets:
       - name: regcred
