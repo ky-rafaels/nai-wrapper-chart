@@ -22,12 +22,19 @@ version: 0.1.0
 # # follow Semantic Versioning. They should reflect the version the application is using.
 # # It is recommended to use it with quotes.
 appVersion: "1.16.0"
-# dependencies:
-#   - name: gateway-crds-helm
-#     version: v1.5.1
-#     # repository: file://charts/gateway-crds-helm-v1.5.1.tgz
-#     repository: oci://docker.io/envoyproxy/gateway-crds-helm
-#   - name: gateway-helm
-#     version: v1.5.1
-#     # repository: file://charts/gateway-helm-v1.5.1.tgz
-#     repository: oci://docker.io/envoyproxy/gateway-helm
+dependencies:
+  - name: gatewayCrdsHelm
+    version: v1.5.1
+    repository: oci://docker.io/envoyproxy/gateway-crds-helm
+  - name: gatewayHelm
+    version: v1.5.1
+    repository: oci://docker.io/envoyproxy/gateway-helm
+  - name: kserve
+    version: v0.15.0
+    repository: oci://ghcr.io/kserve/charts/kserve
+  - name: kserveCrds
+    version: v0.15.0
+    repository: oci://ghcr.io/kserve/charts/kserve-crd
+  - name: opentelemetryOperator
+    version: 0.93.0
+    repository: oci://ghcr.io/open-telemetry/opentelemetry-operator

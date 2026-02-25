@@ -16,4 +16,4 @@ spec:
           {{- end }}
           {{- end }}
         container:
-          image: "{{ .Values.global.repo }}/{{ .Values.gatewayHelm.global.images.naiProxy.image }}"
+          image: "{{ .Values.global.repository }}/{{ .Values.gatewayHelm.global.images.naiProxy.image }}"
