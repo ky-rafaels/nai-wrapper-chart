@@ -1,0 +1,17 @@
+{{- if .Values.naiLabs.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: nai-labs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-labs
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: nai-labs
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+{{- end }}

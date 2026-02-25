@@ -1,0 +1,87 @@
+# Configuration for subchart dependencies
+naiAIGateway:
+  enabled: false
+
+# AI Gateway Helm chart configuration
+# This is controlled by naiAIGateway.enabled above
+# TODO: Update images after pushing to dockerhub
+ai-gateway-helm:
+  extProc:
+    imagePullPolicy: Always
+    imagePullSecrets:
+    - name: nai-operators-secret
+    image: 
+      repository: docker.io/nutanix/nai-ai-gateway-extproc
+      tag: c4f26a8
+  controller:
+    imagePullPolicy: Always
+    imagePullSecrets:
+    - name: nai-operators-secret
+    image: 
+      repository: docker.io/nutanix/nai-ai-gateway-controller
+      tag: c4f26a8
+    mutatingWebhook:
+      certManager:
+        enable: true
+    metricsRequestHeaderAttributes: "x-nutanix-api-key-name:apiKeyName,x-nutanix-user-id:ownerId"
+  endpointConfig:
+    rootPrefix: "/enterpriseai"
+
+envoy:
+  namespace: envoy-gateway-system
+
+# Image pull secret Details
+imagePullSecret:
+  # Name of the image pull secret
+  name: nai-operators-secret
+  # Image registry credentials
+  credentials:
+    registry: https://index.docker.io/v1/
+    username: USERNAME
+    password: PASSWORD
+    email: EMAIL
+
+# Labels common to add components of nai-core
+labels:
+  app.kubernetes.io/name: nai-operators
+
+naiRedis:
+  naiRedisImage:
+    name: docker.io/nutanix/nai-redis
+    tag: 7.0.11-alpine
+  
+  naiRedisResources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 16Mi
+
+nai-clickhouse-operator:
+  operator:
+    image:
+      registry: docker.io
+      repository: nutanix/nai-clickhouse-operator
+      tag: 0.24.2
+  metrics:
+    image:
+      registry: docker.io
+      repository: nutanix/nai-clickhouse-metrics-exporter
+      tag: 0.24.2
+  imagePullSecrets:
+    - name: nai-operators-secret
+
+naiJobs:
+  naiJobsImage:
+    image: docker.io/nutanix/nai-jobs
+    tag: v2.5.0
+
+  # Resources for nai-jobs container
+  resources:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 50Mi

@@ -1,0 +1,32 @@
+{{- if .Values.naiAIGateway.enabled }}
+
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: nai-extproc-podmonitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - envoy-gateway-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy
+      app.kubernetes.io/component: proxy
+      gateway.envoyproxy.io/owning-gateway-name: nai-ingress-gateway
+      gateway.envoyproxy.io/owning-gateway-namespace: nai-system
+      serving.kserve.io/gateway: nai-ingress-gateway
+  podMetricsEndpoints:
+    - interval: 30s
+      path: /metrics
+      port: aigw-metrics   # containerPort name from the ai-gateway-extproc container (1064)
+      metricRelabelings:
+        # keep only the desired metrics
+        - action: keep
+          sourceLabels: [__name__]
+          regex: 'gen_ai.server.request.duration_seconds.*|gen_ai.client.token.usage_token.*|gen_ai.server.time_to_first_token_seconds.*|gen_ai.server.time_per_output_token_seconds.*'
+
+{{- end }}

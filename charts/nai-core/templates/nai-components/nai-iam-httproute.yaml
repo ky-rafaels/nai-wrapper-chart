@@ -1,0 +1,68 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nai-iam-protected-routes
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+  - name: nai-ingress-gateway
+  rules:
+  - matches:
+    # Basic auth
+    - path:
+        type: PathPrefix
+        value: /api/iam/
+      headers:
+        - name: Authorization
+          value: ^Basic\s.+$
+          type: RegularExpression
+    # Bearer token auth
+    - path:
+        type: PathPrefix
+        value: /api/iam/
+      headers:
+        - name: Authorization
+          value: ^Bearer\s.+$
+          type: RegularExpression
+    backendRefs:
+      - name: iam-proxy
+        namespace: {{ .Release.Namespace }}
+        port: 443
+  - matches:
+    - path: { type: PathPrefix, value: /api/iam }
+    backendRefs:
+    - name: nai-oauth2-proxy
+      namespace: {{ .Release.Namespace }}
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nai-iam-unprotected-routes
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+  - name: nai-ingress-gateway
+  rules:
+  - matches:
+    - path: { type: Exact, value: /api/iam/v4.1.b1/authn/.well-known/openid-configuration }
+    - path: { type: Exact, value: /api/iam/v4.1.b1/authn/oidc/token }
+    - path: { type: Exact, value: /api/iam/authn/v1/oidc/token }
+    - path: { type: Exact, value: /api/iam/authn/v1/system_configuration }
+    - path: { type: PathPrefix, value: /api/iam/authn/v1/oidc/auth }
+    - path: { type: Exact, value: /api/iam/authn/v1/oidc/connectors }
+    - path: { type: Exact, value: /api/iam/authn/callback }
+    - path: { type: Exact, value: /api/iam/authn/v1/sessions }
+    - path: { type: Exact, value: /api/iam/authn/v1/oidc/logout }
+    - path: { type: Exact, value: /api/iam/authn/v1/users/password }
+    - path: { type: PathPrefix, value: /ui/iam }
+    backendRefs:
+    - name: iam-proxy
+      namespace: {{ .Release.Namespace }}
+      port: 443

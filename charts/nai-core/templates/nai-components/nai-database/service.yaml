@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nai-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/component: nai-db
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.naiDatabase.external }}
+  type: ExternalName
+  externalName: {{ .Values.naiDatabase.postgresql.postgresHost }}
+  {{- else }}
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.naiDatabase.postgresql.postgresPort | default 5432 }}
+      protocol: TCP
+      name: dbapi
+  {{- end }}
+  selector:
+    app: nai-db

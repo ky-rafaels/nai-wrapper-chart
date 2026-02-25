@@ -1,0 +1,93 @@
+naiApi:
+  # Resources for nai-api container
+  naiApiResources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  
+  # Resources for nai migrate init container
+  naiMigrateInitContainerResources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+  
+  # Resources for nai-api-db-migrate job container
+  naiMigrateJobResources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+
+naiDatabase:
+  # Resources for nai-db container
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+naiInferenceUi:
+  # Resources for nai-ui container
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+# Resources for nai-iep operator
+naiIepOperator:
+  iepOperatorResources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 200m
+      memory: 100Mi
+
+naiMonitoring:
+  opentelemetry:
+    common:
+      resources:
+        requests:
+          cpu: 0.5
+          memory: 500Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+    rsyslogAuditLogsExport:
+      resources:
+        requests:
+          cpu: 0.5
+          memory: 500Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+
+nai-clickhouse-server:
+  clickhouse:
+    resources:
+      requests:
+        cpu: 1
+        memory: 4Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+    storage:
+      storageClass: standard # Storage class to be used by nai-clickhouse-server
+
+nai-clickhouse-keeper:
+  clickhouseKeeper:
+    storage:
+      storageClass: standard # Storage class to be used by nai-clickhouse-keeper

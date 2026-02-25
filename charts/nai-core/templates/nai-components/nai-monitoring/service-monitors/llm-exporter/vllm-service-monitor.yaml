@@ -1,0 +1,58 @@
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nai-vllm-endpoints-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - interval: 30s
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.targetPort }}
+    targetPort: {{ .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.targetPort }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.path }}
+    path: {{ .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.path }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.port }}
+    port: {{ .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.port }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.scheme }}
+    scheme: {{ .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.endpoint.scheme }}
+{{- end }}
+    metricRelabelings:
+    - sourceLabels: [model_name]
+      regex: (.*)
+      targetLabel: endpointName
+      replacement: $1
+    - sourceLabels: [model_name]
+      regex: (.*)
+      targetLabel: targetEndpointName
+      replacement: $1
+    # Drop original model_name label (after copies above)
+    - action: labeldrop
+      regex: ^model_name$
+    # Keep only desired metrics
+{{- if .Values.naiAIGateway.enabled }}
+    - action: keep
+      sourceLabels:
+        - __name__
+      regex: 'vllm:num_requests_running|vllm:num_requests_waiting'
+{{- else }}
+    - action: keep
+      sourceLabels:
+        - __name__
+      regex: 'vllm:time_per_output_token_seconds.*|vllm:time_to_first_token_seconds.*|vllm:num_requests_running|vllm:num_requests_waiting'
+{{- end }}
+
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.namespaceSelector }}
+  namespaceSelector:
+{{ toYaml .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.namespaceSelector | indent 4}}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.serviceSelector }}
+  selector:
+{{ toYaml .Values.naiMonitoring.llmMetricsExporter.vllm.serviceMonitor.serviceSelector | indent 4}}
+{{- end }}
+{{- end }}

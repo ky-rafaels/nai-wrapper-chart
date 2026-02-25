@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nai-ui
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-ui
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nai-ui
+  template:
+    metadata:
+      labels:
+        app: nai-ui
+        app.kubernetes.io/component: nai-ui
+        {{- include "nai-core.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: nai-ui
+          image: {{ .Values.naiInferenceUi.naiUiImage.image }}:{{ .Values.naiInferenceUi.naiUiImage.tag }}
+          resources:
+            {{- toYaml .Values.naiInferenceUi.resources | nindent 12 }}
+          ports:
+            - containerPort: 1900
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: nai-ui-config-volume
+              mountPath: /usr/share/nginx/html/features
+      volumes:
+        - name: nai-ui-config-volume
+          configMap:
+            name: nai-ui-config
+      serviceAccountName: nai-ui-sa

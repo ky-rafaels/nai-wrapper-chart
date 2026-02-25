@@ -1,0 +1,53 @@
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nai-node-exporter-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - interval: 30s
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.tlsConfig }}
+    tlsConfig:
+{{ toYaml .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.tlsConfig | indent 6 }}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.bearerTokenFile }}
+    bearerTokenFile: {{ .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.bearerTokenFile }}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.targetPort }}
+    targetPort: {{ .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.targetPort }}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.path }}
+    path: {{ .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.path }}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.port }}
+    port: {{ .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.port }}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.scheme }}
+    scheme: {{ .Values.naiMonitoring.nodeExporter.serviceMonitor.endpoint.scheme }}
+{{- end }}
+    relabelings:
+    - action: replace
+      regex: (.*)
+      replacement: $1
+      sourceLabels:
+      - __meta_kubernetes_pod_node_name
+      targetLabel: instance
+    metricRelabelings:
+    - action: keep
+      sourceLabels:
+      - __name__
+      regex: 'node_(cpu_|memory_|filesystem_).*'
+  jobLabel: app.kubernetes.io/name
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.namespaceSelector }}
+  namespaceSelector:
+{{ toYaml .Values.naiMonitoring.nodeExporter.serviceMonitor.namespaceSelector | indent 4}}
+{{- end }}
+{{- if .Values.naiMonitoring.nodeExporter.serviceMonitor.serviceSelector }}
+  selector:
+{{ toYaml .Values.naiMonitoring.nodeExporter.serviceMonitor.serviceSelector | indent 4}}
+{{- end }}
+{{- end }}

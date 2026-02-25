@@ -1,0 +1,761 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{ $product := .Values.product | upper }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+    {{- include "altinity-clickhouse-operator.labels" . | nindent 4 }}
+  {{- if .Values.serviceMonitor.additionalLabels }}
+      {{- toYaml .Values.serviceMonitor.additionalLabels | nindent 4 }}
+  {{- end }}
+  annotations:
+    {{- include "altinity-clickhouse-operator.annotations" . | nindent 4}}
+  name: prometheus-clickhouse-operator-rules
+  namespace: {{ template "altinity-clickhouse-operator.namespace" . }}
+spec:
+  groups:
+    - name: {{ $product }}ClickHouseRules
+      rules:
+        - alert: "{{ $product }}_CH_Metrics_Exporter_Down"
+          expr: up{service="altinity-clickhouse-operator-metrics", endpoint="clickhouse-metrics"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $product }} CH metrics exporter is possibly down"
+            description: "Clickhouse metrics exporter has not sent data for more than 1 minute. Please check logs for metrics exporter in operator pod."
+            cause_resolution: '[ { "CH metrics exporter could be down": "Check logs for metrics exporter in CH operator pod." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Operator"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Metrics_Exporter_Down"
+            schema_version: "1"
+            title: "{{ $product }} CH metrics exporter is possibly down"
+            smart_title: "{{ $product }} CH metrics exporter is possibly down"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH metrics exporter is possibly down."
+
+        - alert: "{{ $product }}_CH_Operator_Down"
+          expr: up{service="altinity-clickhouse-operator-metrics", endpoint="operator-metrics"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $product }} CH operator is possibly down"
+            description: ClickHouse operator has not sent data for more than 1 minute. Please check operator logs.
+            cause_resolution: '[ { "CH operator could be down": "Please check CH operator logs." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Operator"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Operator_Down"
+            schema_version: "1"
+            title: "{{ $product }} CH operator is possibly down"
+            smart_title: "{{ $product }} CH operator is possibly down"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH operator is possibly down."
+
+        - alert: "{{ $product }}_CH_Metrics_Exporter_Fetch_Error"
+          expr: chi_clickhouse_metric_fetch_errors{fetch_type='system.metrics'} > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $product }} CH metrics exporter is unable to fetch metrics"
+            description: "ClickHouse metrics exporter failed to fetch metrics. Please check logs for metrics exporter in operator pod."
+            cause_resolution: '[ { "CH metrics exporter failed to fetch metrics": "Please check logs for metrics exporter in operator pod." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Metrics_Exporter_Fetch_Error"
+            schema_version: "1"
+            title: "{{ $product }} CH metrics exporter Fetch Error"
+            smart_title: "{{ $product }} CH metrics exporter Fetch Error"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH metrics exporter fetch error."
+
+        - alert: "{{ $product }}_CH_Server_Restart"
+          expr: (chi_clickhouse_metric_Uptime > 1) and (chi_clickhouse_metric_Uptime < 180)
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $product }} CH Server restarted recently"
+            description: "ClickHouse server process has been restarted within 3 minutes. Look into previous ClickHouse pod logs to investigate restart reason"
+            cause_resolution: '[ { "CH server process has been restarted within 3 minutes": "Look into previous CH pod logs to investigate restart reason." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Restart"
+            schema_version: "1"
+            title: "{{ $product }} CH Server restarted recently"
+            smart_title: "{{ $product }} CH Server restarted recently"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Server restarted recently."
+
+        - alert: "{{ $product }}_CH_Server_DNSErrors"
+          expr: increase(chi_clickhouse_event_DNSError[1m]) > 0 or increase(chi_clickhouse_event_NetworkErrors[1m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "DNS errors occurred within {{ $product }} CH Server"
+            description: "Please check DNS settings in resolve.conf and check server pod's logs"
+            cause_resolution: '[ { "DNS Issue with CH Server": "Please check DNS settings in resolve.conf and check server logs." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DNSErrors"
+            schema_version: "1"
+            title: "DNS errors occurred within {{ $product }} CH Server"
+            smart_title: "DNS errors occurred within {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "DNS errors occurred with {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_DistributedFilesToInsertHigh"
+          expr: chi_clickhouse_metric_DistributedFilesToInsert > 50
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $product }} CH Server has Distributed files to insert greater than 50"
+            description: "ClickHouse server has too many files which are not inserted into MergeTree type tables via Distributed table engine"
+            cause_resolution: '[ { "CH server has too many files which are not inserted into MergeTree type tables via Distributed table engine": "" } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DistributedFilesToInsertHigh"
+            schema_version: "1"
+            title: "{{ $product }} CH Server has Distributed files to insert greater than 50"
+            smart_title: "{{ $product }} CH Server has Distributed files to insert greater than 50"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Server has Distributed files to insert greater than 50"
+
+        - alert: "{{ $product }}_CH_Server_DistributedConnectionExceptions"
+          expr: increase(chi_clickhouse_event_DistributedConnectionFailTry[1m]) > 3 or increase(chi_clickhouse_event_DistributedConnectionFailAtAll[1m]) > 5
+          labels:
+            severity: high
+          annotations:
+            summary: "{{ $product }} CH Server Distributed connection fails occurred"
+            description: "Please check communications between clickhouse server and configured remote servers"
+            cause_resolution: '[ { "Distributed connection fails occurred for CH server": "Please check communications between clickhouse server and configured remote servers." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DistributedConnectionExceptions"
+            schema_version: "1"
+            title: "{{ $product }} CH Server Distributed connection fails occurred"
+            smart_title: "{{ $product }} CH Server Distributed connection fails occurred"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Server Distributed connection fails occurred"
+
+        - alert: "{{ $product }}_CH_Server_RejectedInsert"
+          expr: increase(chi_clickhouse_event_RejectedInserts[1m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Rejected INSERT queries occurred on {{ $product }} CH Server"
+            description: "ClickHouse server has INSERT queries that are rejected due to high number of active data parts for partition in a MergeTree, please reduce INSERT frequency" 
+            cause_resolution: '[ { "CH server rejected INSERT queries": "CH server has INSERT queries that are rejected due to high number of active data parts for partition in a MergeTree, please reduce INSERT frequency." } ]'           
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_RejectedInsert"
+            schema_version: "1"
+            title: "Rejected INSERT queries occurred on {{ $product }} CH Server"
+            smart_title: "Rejected INSERT queries occurred on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Rejected INSERT queries occurred on {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_DelayedInsertThrottling"
+          expr: increase(chi_clickhouse_event_DelayedInserts[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Delayed INSERT queries occurred on {{ $product }} CH Server"
+            description: "ClickHouse server has INSERT queries that are throttled due to high number of active data parts for partition in a MergeTree, please decrease INSERT frequency"
+            cause_resolution: '[ { "CH server has INSERT queries that are throttled": "ClickHouse server has INSERT queries that are throttled due to high number of active data parts for partition in a MergeTree, please decrease INSERT frequency." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DelayedInsertThrottling"
+            schema_version: "1"
+            title: "Delayed INSERT queries occurred on {{ $product }} CH Server"
+            smart_title: "Delayed INSERT queries occurred on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Delayed INSERT queries occurred on {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_MaxPartCountForPartition"
+          expr: chi_clickhouse_metric_MaxPartCountForPartition > 100
+          labels:
+            severity: warning
+          annotations:
+            summary: "Max parts per partition greater than 100 on {{ $product }} CH Server"
+            description: "ClickHouse server has too many parts in one partition and when you have too much unmerged parts inside partition, SELECT queries performance can significate degrade, so clickhouse tries delays or rejects INSERT"
+            cause_resolution: '[ { "CH server has too many parts in one partition": "ClickHouse server has too many parts in one partition and when you have too much unmerged parts inside partition, SELECT queries performance can significate degrade, so clickhouse tries delays or rejects INSERT." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_MaxPartCountForPartition"
+            schema_version: "1"
+            title: "Max parts per partition than 100 on {{ $product }} CH Server"
+            smart_title: "Max parts per partition than 100 on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Max parts per partition than 100 on {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_LowInsertedRowsPerQuery"
+          expr: increase(chi_clickhouse_event_InsertQuery[1m]) > 0 and (increase(chi_clickhouse_event_InsertedRows[1m]) / increase(chi_clickhouse_event_InsertQuery[1m]) <= 1000)
+          labels:
+            severity: warning
+          annotations:
+            summary: "Increase inserted rows per INSERT query for {{ $product }} CH Server"
+            description: "ClickHouse server has low insert speed. Clickhouse team recommends inserting data in packets of at least 1000 rows or no more than a single request per second."
+            cause_resolution: '[ { "CH server observed increase in inserted rows per INSERT query": "ClickHouse server has low insert speed. CH team recommends inserting data in packets of at least 1000 rows or no more than a single request per second." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_LowInsertedRowsPerQuery"
+            schema_version: "1"
+            title: "Increased inserted rows per INSERT query for {{ $product }} CH Server"
+            smart_title: "Increased inserted rows per INSERT query for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased inserted rows per INSERT query for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_LongestRunningQuery"
+          expr: chi_clickhouse_metric_LongestRunningQuery > 900
+          labels:
+            severity: warning
+          annotations:
+            summary: "Long running queries occurred for {{ $product }} CH Server"
+            description: "Try looking at system.processes with long queries"
+            cause_resolution: '[ { "Long running queries experienced by CH server": "Try looking at system.processes with long queries." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_LongestRunningQuery"
+            schema_version: "1"
+            title: "Long running queries occurred for {{ $product }} CH Server"
+            smart_title: "Long running queries occurred for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Long running queries occurred for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_QueryPreempted"
+          expr: chi_clickhouse_metric_QueryPreempted > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Preempted queries occurred for {{ $product }} CH Server"
+            description: "This means queries are stopped and waiting due to priority setting. Try looking at system.processes"
+            cause_resolution: '[ { "CH Server observed preempted queries": "This means queries are stopped and waiting due to priority setting. Try looking at system.processes." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_QueryPreempted"
+            schema_version: "1"
+            title: "Preempted queries occurred for {{ $product }} CH Server"
+            smart_title: "Preempted queries occurred for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Preempted queries occurred for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_ReadonlyReplica"
+          expr: chi_clickhouse_metric_ReadonlyReplica > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "ReadOnly replica occurred for {{ $product }} CH Server"
+            description: "ClickHouse server has ReplicatedMergeTree tables that are currently in readonly state due to reinitialization after ZooKeeper session loss or due to startup without ZooKeeper configured. Please check resources and connection between keeper and server"
+            cause_resolution: '[ { "ReadOnly replica occurred for CH server": "Please check resources and connection between keeper and server along with logs for both." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_ReadonlyReplica"
+            schema_version: "1"
+            title: "ReadOnly replica occurred for {{ $product }} CH Server"
+            smart_title: "ReadOnly replica occurred for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "ReadOnly replica occurred for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_ReplicasMaxAbsoluteDelay"
+          expr: chi_clickhouse_metric_ReplicasMaxAbsoluteDelay > 300
+          labels:
+            severity: critical
+          annotations:
+            summary: "Replication Lag of more than 300s occurred for {{ $product }} CH Server"
+            description: "ClickHouse server has replication lag. When replicas have too much lag, it can be skipped from Distributed SELECT Queries without errors and you will have wrong query results. Check system.replicas, system.replication_queue and free disk space, network connection between clickhouse pod and zookeeper on monitored clickhouse server pods"
+            cause_resolution: '[ { "CH server experienced replication lag of more than 300s": "When replicas have too much lag, it can be skipped from Distributed SELECT Queries without errors and you will have wrong query results. Check replicas, replication queue, free disk space, network connection between clickhouse pod and zookeeper on monitored CH server pods." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_ReplicasMaxAbsoluteDelay"
+            schema_version: "1"
+            title: "Replication Lag of more than 300s occurred for {{ $product }} CH Server"
+            smart_title: "Replication Lag of more than 300s occurred for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Replication Lag of more than 300s occurred for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_TooManyConnections"
+          expr: chi_clickhouse_metric_HTTPConnection + chi_clickhouse_metric_TCPConnection + chi_clickhouse_metric_MySQLConnection > 100
+          labels:
+            severity: warning
+          annotations:
+            summary: "Total connections greater than 100 for {{ $product }} CH Server"
+            description: "ClickHouse server has many open connections."
+            cause_resolution: '[ { "CH server has more than 100 open connections": "Please manage connections effectively." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_TooManyConnections"
+            schema_version: "1"
+            title: "Total connections greater than 100 for {{ $product }} CH Server"
+            smart_title: "Total connections greater than 100 for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Total connections greater than 100 for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_TooManyRunningQueries"
+          expr: ((chi_clickhouse_metric_Query - chi_clickhouse_metric_PendingAsyncInsert) or (chi_clickhouse_metric_Query)) > 80
+          labels:
+            severity: warning
+          annotations:
+            summary: "Too many running queries on {{ $product }} CH Server"
+            description: "Please analyze your workload. Each concurrent SELECT query use memory in JOINs use CPU for running aggregation function and can read lot of data from disk when scan parts in partitions and utilize disk IO. Each concurrent INSERT query, allocate around 1MB per each column in an inserted table and utilize disk IO"
+            schema_type: "prism_alert"
+            cause_resolution: '[ { "Too many running queries on CH server": "Please analyze your workload. Each concurrent SELECT query use memory in JOINs use CPU for running aggregation function and can read lot of data from disk when scan parts in partitions and utilize disk IO." } ]'
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_TooManyRunningQueries"
+            schema_version: "1"
+            title: "Too many running queries on {{ $product }} CH Server"
+            smart_title: "Too many running queries on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Too many running queries on {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_system_settings"
+          expr: delta(chi_clickhouse_metric_ChangedSettingsHash[5m]) != 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "system settings has changed"
+            description: "{{ $product }} CH Server system.settings updated."
+            cause_resolution: '[ { "CH server system settings have changed": "Please verify updated settings" } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_system_settings"
+            schema_version: "1"
+            title: "{{ $product }} CH Server system settings updated"
+            smart_title: "{{ $product }} CH Server system settings updated"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Server system settings updated"
+
+        - alert: "{{ $product }}_CH_Server_Keeper_Exceptions"
+          expr: increase(chi_clickhouse_event_ZooKeeperHardwareExceptions[1m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "ZooKeeperHardwareExceptions greater than 1 for {{ $product }} CH"
+            description: "ClickHouse server has unexpected network errors in communitation with Zookeeper. ClickHouse should reinitialize ZooKeeper session in case of these errors."
+            cause_resolution: '[ { "Zookeeper hardware exceptions occurred for CH server": "CH server has unexpected network errors in communitation with Zookeeper. CH should reinitialize ZooKeeper session in case of these errors." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Keeper_Exceptions"
+            schema_version: "1"
+            title: "ZooKeeperHardwareExceptions greater than 1 for {{ $product }} CH"
+            smart_title: "ZooKeeperHardwareExceptions greater than 1 for {{ $product }} CH"
+            impact_types: "[ \"Availability\" ]"
+            message: "ZooKeeperHardwareExceptions greater than 1 for {{ $product }} CH"
+
+        - alert: "{{ $product }}_CH_Server_Keeper_Sessions"
+          expr: chi_clickhouse_metric_ZooKeeperSession > 1
+          labels:
+            severity: critical
+          annotations:
+            summary: "ZooKeeperSession greater than 1 for {{ $product }} CH"
+            description: "Number of sessions from clickhouse server to ZooKeeper should not be no more than one, because using more than one connection to ZooKeeper may lead to bugs due to lack of linearizability that ZooKeeper consistency model allows."
+            cause_resolution: '[ { "More than one zookeeper session for CH server": "Number of sessions from CH server to ZooKeeper should not be no more than one, because using more than one connection to ZooKeeper may lead to bugs due to lack of linearizability that ZooKeeper consistency model allows." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Keeper_Sessions"
+            schema_version: "1"
+            title: "ZooKeeperSession greater than 1 for {{ $product }} CH"
+            smart_title: "ZooKeeperSession greater than 1 for {{ $product }} CH"
+            impact_types: "[ \"Availability\" ]"
+            message: "ZooKeeperSession greater than 1 for {{ $product }} CH"
+
+        - alert: "{{ $product }}_CH_Server_Disk_Full"
+          expr: chi_clickhouse_metric_DiskFreeBytes / (1024^3) < 5
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $product }} CH Server Disk space less than 5GB left"
+            description: "To avoid switching to read-only mode, please scale-up storage."
+            cause_resolution: '[ { "Less than 5GB available on CH server": "To avoid switching to read-only mode, please scale-up storage." } ]'
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Disk_Full"
+            title: "{{ $product }} CH Server Disk space less than 5GB left"
+            smart_title: "{{ $product }} CH Server Disk space less than 5GB left"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Server Disk space less than 5GB left"
+
+
+        - alert: "{{ $product }}_CH_Server_ReplicatedPartCheckFailed"
+          expr: increase(chi_clickhouse_event_ReplicatedPartChecksFailed[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased ReplicatedPartCheckFailed for {{ $product }} CH Server"
+            description: "ClickHouse server has ReplicatedPartCheckFailed in system.events table. Please check logs on clickhouse server pods"
+            cause_resolution: '[ { "CH server observed failure in check against replicated parts": "CH server has ReplicatedPartCheckFailed in system.events table. Please check logs on clickhouse server pods." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_ReplicatedPartCheckFailed"
+            schema_version: "1"
+            title: "Increased ReplicatedPartCheckFailed for {{ $product }} CH Server"
+            smart_title: "Increased ReplicatedPartCheckFailed for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased ReplicatedPartCheckFailed for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_ReplicatedPartFailedFetches"
+          expr: increase(chi_clickhouse_event_ReplicatedPartFailedFetches[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased ReplicatedPartFailedFetches for {{ $product }} CH Server"
+            description: "ClickHouse server has ReplicatedPartFailedFetches in system.events table. It means server has failed to download data part from replica of a ReplicatedMergeTree table. Please check connections between clickhouse server pod and its replicas"
+            cause_resolution: '[ { "CH server observed failures in fetching replicated parts": "CH server has ReplicatedPartFailedFetches in system.events table. It means server has failed to download data part from replica of a ReplicatedMergeTree table. Please check connections between CH server pod and its replicas." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_ReplicatedPartFailedFetches"
+            schema_version: "1"
+            title: "Increased ReplicatedPartFailedFetches for {{ $product }} CH Server"
+            smart_title: "Increased ReplicatedPartFailedFetches for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased ReplicatedPartFailedFetches for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_ReplicatedDataLoss"
+          expr: increase(chi_clickhouse_event_ReplicatedDataLoss[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased ReplicatedDataLoss for {{ $product }} CH Server"
+            description: "ClickHouse server has ReplicatedDataLoss in system.events table. It means data part that server wanted doesn't exist on any replica, even on replicas that are offline right now. Those data parts are definitely lost. This is normal due to asynchronous replication, when the replica on which the data part was written has failed and when it became online after failure, it doesn't contain that data part. Please check logs on clickhouse server pod."
+            cause_resolution: '[ { "CH server observed loss of replicated data parts": "CH server has ReplicatedDataLoss in system.events table. It means data parts that server wanted does not exist on any replica, even on replicas that are offline right now. Please check logs on CH server pod." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_ReplicatedDataLoss"
+            schema_version: "1"
+            title: "Increased ReplicatedDataLoss for {{ $product }} CH Server"
+            smart_title: "Increased ReplicatedDataLoss for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased ReplicatedDataLoss for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_StorageBufferErrorOnFlush"
+          expr: increase(chi_clickhouse_event_StorageBufferErrorOnFlush[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased StorageBufferErrorOnFlush for {{ $product }} CH Server"
+            description: "ClickHouse server has StorageBufferErrorOnFlush in system.events table. It means something went wrong when clickhouse server tried to flush memory buffers to disk. Please check for disk usage, hardware failures and analyse pod logs"
+            cause_resolution: '[ { "CH server experienced error on storage buffer flush": "CH server has StorageBufferErrorOnFlush in system.events table. It means something went wrong when CH server tried to flush memory buffers to disk. Please check for disk usage, hardware failures and analyse pod logs." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_StorageBufferErrorOnFlush"
+            schema_version: "1"
+            title: "Increased StorageBufferErrorOnFlush for {{ $product }} CH Server"
+            smart_title: "Increased StorageBufferErrorOnFlush for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased StorageBufferErrorOnFlush for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_DataAfterMergeDiffersFromReplica"
+          expr: increase(chi_clickhouse_event_DataAfterMergeDiffersFromReplica[1m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Increased DataAfterMergeDiffersFromReplica for {{ $product }} CH Server"
+            description: "ClickHouse server has DataAfterMergeDiffersFromReplica in system.events table. It means data after merge is not byte-identical to data on other replicas."
+            cause_resolution: '[ { "CH server observed differences in merged data from replicas": "CH server has DataAfterMergeDiffersFromReplica in system.events table. It means data after merge is not byte-identical to data on other replicas." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DataAfterMergeDiffersFromReplica"
+            schema_version: "1"
+            title: "Increased DataAfterMergeDiffersFromReplica for {{ $product }} CH Server"
+            smart_title: "Increased DataAfterMergeDiffersFromReplica for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased DataAfterMergeDiffersFromReplica for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_DistributedSyncInsertionTimeoutExceeded"
+          expr: increase(chi_clickhouse_event_DistributedSyncInsertionTimeoutExceeded[1m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Increased DistributedSyncInsertionTimeoutExceeded for {{ $product }} CH Server"
+            description: "ClickHouse server has DistributedSyncInsertionTimeoutExceeded in system.events table. It mean Synchronous distributed insert timeout exceeded after successfull distributed connection. Please check connection between host and all shards from remote servers config section"
+            cause_resolution: '[ { "CH server has DistributedSyncInsertionTimeoutExceeded entries in events table": "CH server has DistributedSyncInsertionTimeoutExceeded in system.events table. It mean Synchronous distributed insert timeout exceeded after successfull distributed connection. Please check connection between host and all shards from remote servers config section." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DistributedSyncInsertionTimeoutExceeded"
+            schema_version: "1"
+            title: "Increased DistributedSyncInsertionTimeoutExceeded for {{ $product }} CH Server"
+            smart_title: "Increased DistributedSyncInsertionTimeoutExceeded for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased DistributedSyncInsertionTimeoutExceeded"
+
+        - alert: "{{ $product }}_CH_Server_FileDescriptorBufferReadOrWriteFailed"
+          expr: increase(chi_clickhouse_event_ReadBufferFromFileDescriptorReadFailed[1m]) > 0 or increase(chi_clickhouse_event_WriteBufferFromFileDescriptorWriteFailed[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased ReadBufferFromFileDescriptorReadFailed or WriteBufferFromFileDescriptorWriteFailed for {{ $product }} CH Server"
+            description: "ClickHouse server has ReadBufferFromFileDescriptorReadFailed or ReadBufferFromFileDescriptorWriteFailed in system.events table. It mean system can't read or write to some files. Please check logs on clickhouse server pods"
+            cause_resolution: '[ { "CH server has ReadBufferFromFileDescriptorReadFailed or ReadBufferFromFileDescriptorWriteFailed entries in events table": "CH server has ReadBufferFromFileDescriptorReadFailed or ReadBufferFromFileDescriptorWriteFailed in system.events table. It mean system cannot read or write to some files. Please check logs on clickhouse server pods." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_FileDescriptorBufferReadOrWriteFailed"
+            schema_version: "1"
+            title: "Increased ReadBufferFromFileDescriptorReadFailed or WriteBufferFromFileDescriptorWriteFailed for {{ $product }} CH Server"
+            smart_title: "Increased ReadBufferFromFileDescriptorReadFailed or WriteBufferFromFileDescriptorWriteFailed for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased ReadBufferFromFileDescriptorReadFailed or WriteBufferFromFileDescriptorWriteFailed for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_Slowread"
+          expr: increase(chi_clickhouse_event_SlowRead[1m]) > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Increased SlowRead for {{ $product }} CH Server"
+            description: "ClickHouse server has SlowRead in system.events table. It mean reads from files that were slow. This indicates system overload. Check you disks utilization and hardware failures."
+            cause_resolution: '[ { "CH server experienced slow reads": "CH server has SlowRead in system.events table. It mean reads from files that were slow. This indicates system overload. Check you disks utilization and hardware failures." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Slowread"
+            schema_version: "1"
+            title: "Increased SlowRead for {{ $product }} CH Server"
+            smart_title: "Increased SlowRead for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Increased SlowRead for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_Mutations"
+          expr: chi_clickhouse_table_mutations > 100
+          labels:
+            severity: critical
+          annotations:
+            summary: "Too many incomplete system.mutations for {{ $product }} CH Server"
+            description: "system.mutations shows too many active mutations. It means something is wrong with ALTER TABLE DELETE or ALTER TABLE UPDATE queries. Please check for mutations errors in pod logs"
+            cause_resolution: '[ { "Too many incomplete mutations in CH server": "mutations table in system database has too many active mutations. It means something is wrong with ALTER TABLE DELETE or ALTER TABLE UPDATE queries. Please check for mutations errors in pod logs." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Mutations"
+            schema_version: "1"
+            title: "Too many incomplete mutations for {{ $product }} CH Server"
+            smart_title: "Too many incomplete mutations for {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Too many incomplete mutations for {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_DetachedParts"
+          expr: chi_clickhouse_metric_DetachedParts > 0
+          labels:
+            severity: high
+          annotations:
+            summary: "Detached parts present on {{ $product }} CH Server"
+            description: "system.detached_parts shows detached parts. Please check for detached parts in logs"
+            cause_resolution: '[ { "Detached parts occurred on CH server": "Please check for detached parts in logs and in system database." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_DetachedParts"
+            schema_version: "1"
+            title: "Detached parts on {{ $product }} CH Server"
+            smart_title: "Detached parts on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Detached parts on {{ $product }} CH Server"
+
+        - alert: "{{ $product }}_CH_Server_Too_Many_Active_Parts"
+          expr: chi_clickhouse_table_parts{active="1"} > 900
+          labels:
+            severity: warning
+          annotations:
+            summary: "Too many active parts in system.parts on {{ $product }} CH Server"
+            description: "ClickHouse stores data in parts, and too many parts can indicate merge issues or high write frequency. Large numbers of parts increase memory usage and slows down queries. Use batch inserts instead of frequent small inserts."
+            cause_resolution: '[ { "CH server has more than 900 active data parts": "CH stores data in parts, and too many parts can indicate merge issues or high write frequency. Large numbers of parts increase memory usage and slows down queries. Use batch inserts instead of frequent small inserts." } ]'
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Server"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Server_Too_Many_Active_Parts"
+            schema_version: "1"
+            title: "Too many active parts on {{ $product }} CH Server"
+            smart_title: "Too many active parts on {{ $product }} CH Server"
+            impact_types: "[ \"Availability\" ]"
+            message: "Too many active parts on {{ $product }} CH Server"
+
+{{- end }}

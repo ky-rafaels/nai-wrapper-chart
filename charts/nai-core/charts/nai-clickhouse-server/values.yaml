@@ -1,0 +1,260 @@
+# Namespace for the ClickHouse server
+namespace: ""
+
+# Override name for the ClickHouse server
+nameOverride: "nai-clickhouse-server"
+
+# Default values for ClickHouse server setup
+clickhouse:
+  # Additional labels and annotations for the ClickHouse server
+  labels:
+    # "example.com/label": "value"
+  annotations:
+    # "example.com/annotation": "value"
+
+  # Number of shards in the ClickHouse cluster.
+  shards: 1
+  # Number of replicas per shard in the ClickHouse cluster.
+  replicas: 1
+  
+  # Image details for ClickHouse server
+  image:
+    # URL of the Docker registry
+    registry: docker.io
+    # Repository name for the Docker image
+    repository: nutanix/nai-clickhouse-server
+    # Tag/version of the Docker image
+    tag: "25.3.5.42"
+    # Image pull policy (e.g., Always, IfNotPresent)
+    imagePullPolicy: IfNotPresent
+  
+  # ClickHouse server cluster identifier
+  clusterName: "chcluster1"
+
+  # PriorityClass for ClickHouse server pod(s)
+  priorityClassName: ""
+
+  # Set node selector for ClickHouse server pod(s)
+  nodeSelector: {}
+    # "kubernetes.io/role": "worker"
+
+  # Set anti-affinity for ClickHouse server pod(s)
+  podAntiAffinity: {}
+    # "hard" or "soft"
+    # If set to "hard", it will enforce strict anti-affinity rules.
+    # If set to "soft", it will prefer but not require anti-affinity.
+    # type: "soft"
+    # topologyKey for anti-affinity (Default: "kubernetes.io/hostname")
+    # topologyKey: "kubernetes.io/hostname"
+
+  # Tolerations for ClickHouse server pod(s)
+  tolerations: []
+  # - key: "node.kubernetes.io/role"
+  #   operator: "Equal"
+  #   value: "worker"
+  #   effect: "NoSchedule"
+
+  # CHK cluster service details. These details will be used to connect to ClickHouse Keeper cluster service.
+  keeperClusterService:
+    # Default keeper cluster service endpoint
+    name: "clickhouse-chk-svc"
+    # Default keeper cluster service TCP port
+    port: 2181
+
+  # Storage specifications for ClickHouse server data volume
+  storage:
+    # Storage class for the persistent volume claim (PVC). If empty, the default storage class will be used.
+    storageClass: ""
+    # Size of the persistent volume claim (PVC) for ClickHouse server data.
+    pvcStorage: "100Gi"
+    # Access modes for the persistent volume claim (PVC).
+    accessModes:
+      - ReadWriteOnce
+    # Reclaim policy for the persistent volume claim (PVC). Values can be Retain or Delete.
+    reclaimPolicy: "Retain"
+
+  # ClickHouse default and admins users information (If not provided, default values will be used)
+  users:
+    # Default user for ClickHouse server
+    default:
+      username: ""
+      password: ""
+    admin:
+      username: ""
+      password: ""
+
+  # Extra environment variables to be added to server pod(s)
+  extraEnvVars: []
+  # - name: CLICKHOUSE_SERVER_LOG_LEVEL
+  #   value: "information"
+
+  # Resource specifications for clickhouse server
+  resources:
+    limits:
+      cpu: 2
+      memory: 8Gi
+    requests:
+      cpu: 2
+      memory: 8Gi     
+
+  # Service specifications for ClickHouse server. This service is used to access the ClickHouse server.
+  service:
+    type: ClusterIP
+    ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+      protocol: TCP
+    - name: tcp
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: prom
+      port: 9009
+      targetPort: 9009
+      protocol: TCP
+  
+  # List of image pull secrets to use for the ClickHouse Server pods
+  imagePullSecrets: []
+  # - "regcred"
+  
+  # Init container configurations to wait for ClickHouse Keeper readiness and add UDF
+  initContainers:
+    waitForKeeper:
+      # Enable or disable the init container
+      enabled: true
+      # Image details for the init container (bash image with /dev/tcp support)
+      image:
+        # URL of the Docker registry
+        registry: docker.io
+        # Repository name for the init container image(nai-jobs with netcat pre-installed)
+        repository: nutanix/nai-jobs
+        # Tag/version of the nai-jobs Docker image
+        tag: latest
+        # Image pull policy (e.g., Always, IfNotPresent)
+        imagePullPolicy: IfNotPresent
+        # Note: Uses nai-jobs nc for health checks - no additional packages needed
+        # Alternative images with netcat pre-installed:
+        # - alpine:3.19 (requires: apk add netcat-openbsd)
+        # - subfuzion/netcat (pre-built netcat image for airgapped environments)
+      # Timeout in seconds to wait for ClickHouse Keeper to be ready
+      timeoutSeconds: 600
+      # Interval in seconds between health checks
+      intervalSeconds: 15
+      # Resource specifications for the init container
+      resources:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 50m
+          memory: 64Mi
+    
+    addUdf:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: nutanix/nai-clickhouse-udf
+        tag: latest
+        imagePullPolicy: IfNotPresent
+      resources:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 50m
+          memory: 64Mi
+  
+  # Custom configuration for ClickHouse server
+  serverConfigurations:
+    # User settings for ClickHouse server. Settings for default and admin users will be applied by default.
+    # You can add more users as needed.
+    users: {}
+    # Profiles for ClickHouse server. You can define custom profile level settings here.
+    profiles:
+      default/tcp_keep_alive_timeout: 15
+      default/use_hedged_requests: 0
+      default/distributed_connections_pool_size: 4096
+      default/max_distributed_connections: 64
+      default/connections_with_failover_max_tries: 7
+    # General settings for ClickHouse server. These settings will be applied to the server.
+    settings:
+      disable_internal_dns_cache: 1
+      max_partition_size_to_drop: 0
+      max_table_size_to_drop: 0
+      user_scripts_path: /var/lib/clickhouse/user_scripts/
+      user_defined_executable_functions_config: '/etc/clickhouse-server/functions/custom-functions.xml'
+    # Settings in form of XML files that will be applied to the ClickHouse server.
+    files:
+      config.d/merge_tree_settings.xml: |
+        <clickhouse>
+          <merge_tree>
+            <max_suspicious_broken_parts>100000</max_suspicious_broken_parts>
+          </merge_tree>
+        </clickhouse>
+      config.d/opentelemetry_span_log.xml: |
+        <clickhouse>
+          <opentelemetry_span_log>
+            <engine>Engine = Null</engine>
+          </opentelemetry_span_log>
+        </clickhouse>
+      users.d/restrict_default_user.xml: |
+        <yandex>
+            <users>
+              <default>
+                <allow_databases>
+                  <database>system</database>
+                </allow_databases>
+              </default>
+            </users>
+        </yandex>
+      config.d/interserver_credentials.xml: |
+        <clickhouse>
+          <!-- Disable MySQL and PostreSQL emulation ports -->
+          <mysql_port remove="true"/>
+          <postgresql_port remove="true"/>
+        </clickhouse>
+      config.d/optimise_log.xml: |
+        <clickhouse>
+          <query_thread_log remove="1" />
+          <query_views_log remove="1" />
+          <metric_log remove="1" />
+          <asynchronous_metric_log remove="1" />
+          <session_log remove="1"/>
+          <asynchronous_insert_log remove="1" />
+          <processors_profile_log remove="1" />
+          <query_log remove="1" />
+          <part_log remove="1" />
+          <text_log remove="1" />
+          <trace_log remove="1"/>
+          <latency_log remove="1"/>
+          <zookeeper_log remove="1"/>
+        </clickhouse>
+      config.d/console_logger.xml: |
+        <clickhouse>
+          <logger>
+            <console>true</console>
+            <level>information</level>
+          </logger>
+        </clickhouse>
+      config.d/system_log_ttl.xml: |
+        <clickhouse>
+          <error_log replace="1">
+            <database>system</database>
+            <table>error_log</table>
+            <engine>ENGINE = MergeTree PARTITION BY (event_date) ORDER BY
+                    (event_time) TTL event_date + INTERVAL 14 DAY
+            </engine>  
+          </error_log>
+          <crash_log replace="1">
+            <database>system</database>
+            <table>crash_log</table>
+            <engine>ENGINE = MergeTree PARTITION BY (event_date) ORDER BY
+                    (event_time) TTL event_date + INTERVAL 14 DAY
+            </engine>  
+          </crash_log>
+        </clickhouse>
+      config.d/prepare_log_tables.xml: |
+        <clickhouse>
+          <prepare_system_log_tables_on_startup>true</prepare_system_log_tables_on_startup>
+        </clickhouse>

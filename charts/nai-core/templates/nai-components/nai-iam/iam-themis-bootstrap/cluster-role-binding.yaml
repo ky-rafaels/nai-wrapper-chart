@@ -1,0 +1,15 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: iam-themis-bootstrap-rolebinding
+  labels:
+    app.kubernetes.io/component: nai-iam-themis-bootstrap
+    {{- include "nai-core.labels" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: iam-themis-bootstrap-sa
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: iam-themis-bootstrap-role
+  apiGroup: ""

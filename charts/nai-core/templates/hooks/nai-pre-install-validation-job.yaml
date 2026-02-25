@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-pre-install-validation-job
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-core.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nai-pre-install-validation-job
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1 # retry once if the job fails
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: nai-helm-hooks-sa
+      containers:
+      - name: pre-install-validator
+        image: {{ .Values.naiJobs.naiJobsImage.image }}:{{ .Values.naiJobs.naiJobsImage.tag }}
+        command: ["python", "-m", "handlers", "nai-pre-install-validator"]
+        env:
+        - name: ENABLE_AIGATEWAY_CRDS
+          value: "{{ .Values.naiAIGateway.enabled }}"
+        - name: NAI_STORAGE_CLASS
+          value: "{{ .Values.naiApi.storageClassName }}"
+        resources:
+          {{- toYaml .Values.naiJobs.resources | nindent 12 }}

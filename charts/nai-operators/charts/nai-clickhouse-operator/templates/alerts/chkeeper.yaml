@@ -1,0 +1,140 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{ $product := .Values.product | upper }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+    {{- include "altinity-clickhouse-operator.labels" . | nindent 4 }}
+    {{- if .Values.serviceMonitor.additionalLabels }}
+    {{- toYaml .Values.serviceMonitor.additionalLabels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- include "altinity-clickhouse-operator.annotations" . | nindent 4}}
+  name: prometheus-clickhouse-keeper-rules
+  namespace: {{ template "altinity-clickhouse-operator.namespace" . }}
+spec:
+  groups:
+    - name: {{ $product }}ClickHouseKeeperRules
+      rules:
+        - alert: "{{ $product }}_CH_Keeper_Down"
+          expr: up{app=~'clickhouse-keeper.*'} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CH Keeper is down"
+            description: "{{ $product }} ClickHouse Keeper is down. Please check pod status and logs"
+            cause_resolution: '[ { "CH keeper could be down": "Please check keeper pod status and logs." } ]'
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Keeper"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Keeper_Down"
+            title: "{{ $product }} CH Keeper is down"
+            smart_title: "{{ $product }} CH Keeper is down"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Keeper is down."
+
+        - alert: "{{ $product }}_CH_Keeper_HighLatency"
+          expr: ClickHouseAsyncMetrics_KeeperMaxLatency{app=~'clickhouse-keeper.*'} > 500
+          for: 15m
+          labels:
+            severity: high
+          annotations:
+            summary: "CH Keeper showing high latency"
+            description: " Latency is the average amount of time it takes for the server to respond to each client request since the server was started. Look into resource utilisation for clickhouse keeper."
+            cause_resolution: '[ { "CH keeper observed high latency in responses": "Latency is the average amount of time it takes for the server to respond to each client request since the server was started. Look into resource utilisation for CH keeper." } ]'
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Keeper"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Keeper_HighLatency"
+            title: "{{ $product }} CH Keeper showing higher latency"
+            smart_title: "{{ $product }} CH Keeper showing higher latency"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Keeper showing higher latency"
+
+        - alert: "{{ $product }}_CH_Keeper_OutstandingRequests"
+          expr: ClickHouseMetrics_KeeperOutstandingRequets{app=~'clickhouse-keeper.*'} > 10
+          for: 10m
+          labels:
+            severity: high
+          annotations:
+            summary: "{{ $product }} CH Keeper is receiving more requests than it can process."
+            description: "Look into resource utilization for clickhouse keeper"
+            cause_resolution: '[ { "CH keeper is receiving more requests than it can process": "Look into resource utilization for CH keeper." } ]'
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Keeper"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Keeper_OutstandingRequests"
+            title: "{{ $product }} CH Keeper is receiving more requests than it can process"
+            smart_title: "{{ $product }} CH Keeper is receiving more requests than it can process"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Keeper is receiving more requests than it can process"
+
+        - alert: "{{ $product }}_CH_Keeper_HighFileDescriptors"
+          expr: ClickHouseAsyncMetrics_KeeperOpenFileDescriptorCount{app=~'clickhouse-keeper.*'} > 4096
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $product }} CH Keeper Number of file descriptors used over the limit."
+            description: "{{ $product }} ClickHouse Keeper Number of file descriptors used over the limit."
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Keeper"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Keeper_HighFileDescriptors"
+            title: "{{ $product }} CH Keeper Number of file descriptors used over the limit"
+            smart_title: "{{ $product }} CH Keeper Number of file descriptors used over the limit"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Keeper Number of file descriptors used over the limit"
+
+        - alert: "{{ $product }}_CH_Keeper_HighEphemeralNodes"
+          expr: ClickHouseAsyncMetrics_KeeperEphemeralsCount{app=~'clickhouse-keeper.*'} > 100
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $product }} CH Keeper has too many high ephemeral znodes count."
+            description: "Please check zookeeper documentation on ephemeral znodes"
+            cause_resolution: '[ { "CH keeper has too many high ephemeral znodes count": "Please check zookeeper documentation on ephemeral znodes." } ]'
+            schema_version: "1"
+            schema_type: "prism_alert"
+            service_name: "{{ $product }} ClickHouse Keeper"
+            primary_entity_type: "cluster"
+            classification_list: "[ \"CLUSTER\" ]"
+            auto_resolve: "true"
+            auto_resolve_after: "PT90M"
+            tenant_specific: "false"
+            is_deduped: "false"
+            schema_id: "{{ $product }}_CH_Keeper_HighEphemeralNodes"
+            title: "{{ $product }} CH Keeper has too many high ephemeral znodes count"
+            smart_title: "{{ $product }} CH Keeper has too many high ephemeral znodes count"
+            impact_types: "[ \"Availability\" ]"
+            message: "{{ $product }} CH Keeper has too many high ephemeral znodes count"
+{{- end }}

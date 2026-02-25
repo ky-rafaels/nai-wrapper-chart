@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: circuit-breaker-cm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: iam-proxy-control-plane
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  circuit_breaker_config.yaml: |
+    resilience-go.circuitbreaker:
+      instances:
+        iam_circuit:
+          failureRateThreshold: 75 # Failure rate threshold in percentage after which the circuitbreaker will open. When the failure rate is equal or greater than the threshold the CircuitBreaker transitions to open and starts short-circuiting calls.
+          slidingWindowSize: 10 #  Only last sliding window size requests are used to check for circuitbreaker open condition.
+          waitDurationInOpenStateMsecs: 2000  # millisecs to wait before moving to half-open state after going in open state.
+          permittedNumberOfCallsInHalfOpenState: 2 # Number of calls to try and check for closing circuitbreaker in half-open state.
+          requiredSuccessfulCallsInHalfOpenState: 2 # Number of continuous successful calls needed in half-open state to close the circuitbreaker

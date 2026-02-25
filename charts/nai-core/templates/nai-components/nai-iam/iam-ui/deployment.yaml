@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-ui
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-ui
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-ui
+  template:
+    metadata:
+      labels:
+        app: iam-ui
+    spec:
+      serviceAccountName: nai-iam-sa
+      containers:
+      - name: iam-ui
+        image: {{ .Values.naiIam.iamUi.image }}:{{ .Values.naiIam.iamUi.tag }}
+        resources:
+          {{- toYaml .Values.naiIam.iamUiResources | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 5557
+        volumeMounts:
+        - name: health-volume
+          mountPath: /health
+        - name: iam-ui-tls-vol
+          mountPath: /etc/upstream_tls_secrets
+          readOnly: true
+        # livenessProbe:
+        #   initialDelaySeconds: 30
+        #   periodSeconds: 30
+        #   timeoutSeconds: 20
+        #   exec:
+        #     command:
+        #     - sh
+        #     - -c
+        #     - /health/ping_healthz.sh /etc/upstream_tls_secrets/tls.key /etc/upstream_tls_secrets/tls.crt /etc/upstream_tls_secrets/ca.crt
+        # readinessProbe:
+        #   initialDelaySeconds: 10
+        #   periodSeconds: 30
+        #   timeoutSeconds: 20
+        #   exec:
+        #     command:
+        #     - sh
+        #     - -c
+        #     - /health/ping_healthz.sh /etc/upstream_tls_secrets/tls.key /etc/upstream_tls_secrets/tls.crt /etc/upstream_tls_secrets/ca.crt
+        env:
+        - name: TLS_KEY
+          value: "/etc/upstream_tls_secrets/tls.key"
+        - name: TLS_CERT
+          value: "/etc/upstream_tls_secrets/tls.crt"
+        - name: CA_CERT
+          value: "/etc/upstream_tls_secrets/ca.crt"
+      volumes:
+      - name: health-volume
+        configMap:
+          name: iam-ui-health
+          defaultMode: 0755
+      - name: iam-ui-tls-vol
+        secret:
+          secretName: iam-ui-tls-cert
+          defaultMode: 384 # this will give 0600 permission octal to decimal

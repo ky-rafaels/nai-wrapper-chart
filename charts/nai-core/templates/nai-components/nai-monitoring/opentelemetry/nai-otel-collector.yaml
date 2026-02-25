@@ -1,0 +1,335 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: nai-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: opentelemetry
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  initContainers:
+    - name: nai-otel-prechecks
+      image: {{ .Values.naiJobs.naiJobsImage.image }}:{{ .Values.naiJobs.naiJobsImage.tag }}
+      command: 
+        - python3
+        - -c
+        - |
+          import sys
+          import time
+          import os
+          import requests
+          
+          # Validate required environment variables
+          required_env_vars = [
+              "CLICKHOUSE_USERNAME",
+              "CLICKHOUSE_PASSWORD",
+              "CLICKHOUSE_DATABASE",
+              "CLICKHOUSE_GAUGE_TABLE",
+              "CLICKHOUSE_COUNTER_TABLE",
+              "CLICKHOUSE_HISTOGRAM_TABLE"
+          ]
+          
+          missing_vars = []
+          for var in required_env_vars:
+              if not os.environ.get(var):
+                  missing_vars.append(var)
+          
+          if missing_vars:
+              print("ERROR: Missing required environment variables:")
+              for var in missing_vars:
+                  print(f"  - {var}")
+              sys.exit(1)
+          
+          # ClickHouse connection details
+          CH_HOST = "chcluster1-ep.{{ .Release.Namespace }}.svc.cluster.local"
+          CH_PORT = 8123
+          CH_USER = os.environ.get("CLICKHOUSE_USERNAME")
+          CH_PASS = os.environ.get("CLICKHOUSE_PASSWORD")
+          CH_DB = os.environ.get("CLICKHOUSE_DATABASE")
+          CH_URL = f"http://{CH_HOST}:{CH_PORT}"
+          
+          # Tables to check
+          GAUGE_TABLE = os.environ.get("CLICKHOUSE_GAUGE_TABLE")
+          COUNTER_TABLE = os.environ.get("CLICKHOUSE_COUNTER_TABLE")
+          HISTOGRAM_TABLE = os.environ.get("CLICKHOUSE_HISTOGRAM_TABLE")
+          
+          TABLES = [
+              GAUGE_TABLE,
+              COUNTER_TABLE,
+              HISTOGRAM_TABLE,
+              f"{GAUGE_TABLE}_raw",
+              f"{COUNTER_TABLE}_raw",
+              f"{HISTOGRAM_TABLE}_raw"
+          ]
+          
+          # Timeout configuration
+          TIMEOUT_SECONDS = 600  # 10 minutes
+          RETRY_INTERVAL = 5     # 5 seconds between retries
+          
+          def execute_query(query):
+              """Execute ClickHouse query via HTTP using requests"""
+              try:
+                  response = requests.post(
+                      CH_URL,
+                      params={"user": CH_USER, "password": CH_PASS},
+                      data=query,
+                      timeout=5
+                  )
+                  response.raise_for_status()
+                  
+                  # Return all non-empty lines as a list
+                  body = response.text.strip()
+                  lines = [line.strip() for line in body.split('\n') if line.strip()]
+                  return lines, None
+              except Exception as e:
+                  return None, str(e)
+          
+          def check_clickhouse_ready():
+              """Check if ClickHouse server is reachable"""
+              try:
+                  response = requests.get(f"{CH_URL}/ping", timeout=2)
+                  return response.status_code == 200
+              except:
+                  return False
+          
+          def check_database_exists():
+              """Check if database exists"""
+              # Query all databases and check if our target database is in the list
+              all_dbs, error = execute_query("SELECT name FROM system.databases")
+              
+              if error:
+                  print(f"  Debug - Database check error: {error}")
+                  return False
+              
+              if not all_dbs:
+                  print(f"  Debug - No databases found")
+                  return False
+              
+              print(f"  Debug - Available databases: {', '.join(all_dbs)}")
+              
+              # Check if our target database exists in the list
+              if CH_DB in all_dbs:
+                  print(f"  Debug - Found '{CH_DB}' in database list")
+                  return True
+              else:
+                  print(f"  Debug - '{CH_DB}' NOT found in database list")
+                  return False
+          
+          def check_all_tables_exist():
+              """Check if all required tables exist"""
+              # Query all tables in the database once
+              all_tables, error = execute_query(f"SELECT name FROM system.tables WHERE database='{CH_DB}'")
+              
+              if error:
+                  print(f"  Debug - Table check error: {error}")
+                  return False, "unknown (query error)"
+              
+              if not all_tables:
+                  print(f"  Debug - No tables found in database '{CH_DB}'")
+                  return False, TABLES[0]
+              
+              print(f"  Debug - Found {len(all_tables)} tables in '{CH_DB}': {', '.join(all_tables)}")
+              
+              # Check each required table
+              for table in TABLES:
+                  if table not in all_tables:
+                      return False, table
+              
+              return True, None
+          
+          # Main retry loop
+          print("Starting ClickHouse schema validation...")
+          print(f"Will retry for up to {TIMEOUT_SECONDS // 60} minutes...")
+          
+          start_time = time.time()
+          attempt = 0
+          
+          while True:
+              attempt += 1
+              elapsed = time.time() - start_time
+              
+              # Check if timeout exceeded
+              if elapsed >= TIMEOUT_SECONDS:
+                  print(f"ERROR: Timeout exceeded ({TIMEOUT_SECONDS // 60} minutes). ClickHouse schema is not ready.")
+                  sys.exit(1)
+              
+              remaining = int(TIMEOUT_SECONDS - elapsed)
+              print(f"\n[Attempt {attempt}] Checking ClickHouse (Time remaining: {remaining}s)...")
+              
+              # Step 1: Check if ClickHouse server is reachable
+              if not check_clickhouse_ready():
+                  print("ClickHouse server is not reachable yet. Retrying...")
+                  time.sleep(RETRY_INTERVAL)
+                  continue
+              print("✓ ClickHouse server is reachable")
+              
+              # Step 2: Check if database exists
+              if not check_database_exists():
+                  print(f"Database '{CH_DB}' does not exist yet. Retrying...")
+                  time.sleep(RETRY_INTERVAL)
+                  continue
+              print(f"✓ Database '{CH_DB}' exists")
+              
+              # Step 3: Check if all tables exist
+              all_tables_exist, missing_table = check_all_tables_exist()
+              if not all_tables_exist:
+                  print(f"Table '{missing_table}' does not exist yet. Retrying...")
+                  time.sleep(RETRY_INTERVAL)
+                  continue
+              print("✓ All required tables exist:")
+              for table in TABLES:
+                  print(f"  - {table}")
+              
+              # All checks passed
+              print("\n✅ All schema checks passed! ClickHouse is ready with all required tables.")
+              break
+      envFrom:
+        - secretRef:
+            name: nai-clickhouse-creds
+      resources:
+        {{- toYaml .Values.naiJobs.resources | nindent 8 }}
+  mode: daemonset
+  image: {{ .Values.naiMonitoring.opentelemetry.collectorImage }}
+  securityContext:
+    runAsUser: 0
+  serviceAccount: nai-otel-sa
+  resources:
+    {{- toYaml .Values.naiMonitoring.opentelemetry.common.resources | nindent 4 }}
+  volumeMounts:
+    - name: otel-pvc
+      mountPath: /data/opentelemetry
+      subPathExpr: $(NODE_NAME)
+    - name: varlog
+      mountPath: /var/log/pods/
+      readOnly: true
+  volumes:
+    - name: otel-pvc
+      persistentVolumeClaim:
+        claimName: nai-otel-pvc
+    - name: varlog
+      hostPath:
+        path: /var/log/pods/
+  env:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+  envFrom:
+    - secretRef:
+        name: nai-clickhouse-creds
+
+  targetAllocator:
+    enabled: true
+    image: {{ .Values.naiMonitoring.opentelemetry.targetAllocator.image.repository }}:{{ .Values.naiMonitoring.opentelemetry.targetAllocator.image.tag }}
+    resources:
+      {{- toYaml .Values.naiMonitoring.opentelemetry.targetAllocator.resources | nindent 8 }}
+    serviceAccount: nai-otel-sa
+    allocationStrategy: per-node
+    prometheusCR:
+      enabled: true
+      serviceMonitorSelector:
+        matchLabels:
+          prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+      {{- if .Values.naiAIGateway.enabled }}
+      podMonitorSelector:
+        matchLabels:
+          prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+      {{- end }}
+
+  tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  
+  config:
+    extensions:
+      file_storage:
+        directory: /data/opentelemetry
+
+    receivers:
+      filelog:
+        include: [ /var/log/pods/*iam-user-authn*/iam-user-authn/*.log, /var/log/pods/*iam-themis*/iam-themis/*.log ]
+        start_at: beginning
+        storage: file_storage
+        operators:
+          # Equivalent of kubernetes regex parser
+          - id: regex-parse
+            type: regex_parser
+            regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) (?P<log>.*)$'
+
+          # JSON parser (parse the log field into structured JSON)
+          - id: json-parser
+            type: json_parser
+            # Drop the log if it is not JSON
+            on_error: drop_quiet
+            parse_from: attributes.log
+      
+      prometheus:
+        config:
+          scrape_configs: []
+
+    processors:      
+      filter/iam_audit_log:
+        error_mode: ignore
+        logs:
+          log_record:
+            # Drop all operation types that are not create, update, delete, login, logout
+            - 'attributes["operation_type"] == nil or not IsMatch(attributes["operation_type"], "^(create|update|delete|login|logout)$")'
+            # For future reference:
+            # - 'attributes["entity_type"] != nil and not IsMatch(attributes["entity_type"], "^(User|Identity Provider|User Group|User Key|Api Key|Buckets Access Key|Role|Access Policy|Client|Authorize|SchemaMigrate)$")'
+            # Drop all entity types that are not User, Identity Provider, User Group, Access Policy
+            - 'attributes["entity_type"] != nil and not IsMatch(attributes["entity_type"], "^(User|Identity Provider|User Group|Access Policy)$")'
+            # Drop all logs that have operation type login or logout and nil entity type
+            - 'attributes["entity_type"] == nil and not IsMatch(attributes["operation_type"], "^(login|logout)$")'
+      
+      {{- if .Values.naiAIGateway.enabled }}
+      transform/metrics_labels:
+        error_mode: ignore
+        metric_statements:
+          - context: datapoint
+            statements:
+              # Failure when error.type exists and is non-empty, and status not already present
+              - set(attributes["status"], "failure") where attributes["status"] == nil and IsMatch(metric.name, "^gen_ai\\.server\\.request\\.duration_seconds$") and (attributes["error.type"] != nil and not IsMatch(attributes["error.type"], "^$"))
+              # Success when error.type missing or empty, and status not already present
+              - set(attributes["status"], "success") where attributes["status"] == nil and IsMatch(metric.name, "^gen_ai\\.server\\.request\\.duration_seconds$") and (attributes["error.type"] == nil or IsMatch(attributes["error.type"], "^$"))
+      {{- end }}
+
+    exporters:
+      otlphttp:
+        sending_queue:
+          queue_size: 5000
+          storage: file_storage
+        logs_endpoint: http://nai-api.{{ .Release.Namespace }}.svc.cluster.local:7002/internal/api/enterpriseai/v1/auditlogs/
+        compression: none
+        tls:
+          insecure: true
+        encoding: json
+      
+      clickhouse:
+        endpoint: tcp://${env:CLICKHOUSE_ADDRESS}
+        username: ${env:CLICKHOUSE_USERNAME}
+        password: ${env:CLICKHOUSE_PASSWORD}
+        database: ${env:CLICKHOUSE_DATABASE}
+        create_schema: false
+        metrics_tables:
+          gauge:
+            name: ${env:CLICKHOUSE_GAUGE_TABLE}
+          sum:
+            name: ${env:CLICKHOUSE_COUNTER_TABLE}
+          histogram:
+            name: ${env:CLICKHOUSE_HISTOGRAM_TABLE}
+
+    service:
+      extensions: [file_storage]
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [filter/iam_audit_log]
+          exporters: [otlphttp]
+        metrics:
+          receivers: [prometheus]
+          {{- if .Values.naiAIGateway.enabled }}
+          processors: [transform/metrics_labels]
+          {{- else }}
+          processors: []
+          {{- end }}
+          exporters: [clickhouse]

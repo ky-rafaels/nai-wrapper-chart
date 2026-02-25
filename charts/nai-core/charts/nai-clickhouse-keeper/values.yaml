@@ -1,0 +1,122 @@
+# Namespace for the ClickHouse Keeper
+namespace: ""
+
+# Override name for the ClickHouse Keeper
+nameOverride: "nai-clickhouse-keeper"
+
+clickhouseKeeper:
+  # Additional labels to be added to the ClickHouse Keeper pods
+  labels:
+    # example.com/label: "value"
+  
+  # Additional annotations to be added to the ClickHouse Keeper pods
+  annotations:
+    # example.com/annotation: "value"
+
+  # Cluster name for ClickHouse Keeper
+  clusterName: "chkeeper"
+  
+  # Number of replicas of ClickHouse Keeper to run
+  replicas: 1
+
+  # Image details for the ClickHouse Keeper
+  image:
+    # URL of the Docker registry
+    registry: docker.io
+    # Repository name for the Docker image
+    repository: nutanix/nai-clickhouse-keeper
+    # Tag/version of the Docker image
+    tag: "25.3.5.42"
+    # Image pull policy (e.g., Always, IfNotPresent)
+    imagePullPolicy: IfNotPresent
+
+  # ClickHouse Keeper service configuration
+  service:
+    # Type of Kubernetes service (e.g., ClusterIP, NodePort, LoadBalancer)
+    type: ClusterIP
+    # List of ports exposed by the service (client port and metrics port are added by default)
+    ports: []
+    # - name: http
+    #   port: 8000
+    #   targetPort: 8181
+    #   protocol: TCP
+
+  # List of image pull secrets to use for the ClickHouse Keeper pods
+  imagePullSecrets: []
+  # - "regcred"
+  
+  metrics:
+    # Enable or disable metrics collection (true/false)
+    enabled: true
+    # Path where metrics will be exposed
+    path: "/metrics"
+    # Port on which metrics will be exposed
+    port: 7000
+    # Enable or disable asynchronous metrics collection (true/false)
+    asyncMetrics: true
+  
+  settings:
+    # Log level for ClickHouse Keeper (supported values are: trace, debug, information, warning, error, none)
+    logLevel: "information"
+    # Log level for Raft protocol (e.g., information, warning, error)
+    raftLogLevel: "information"
+    # Enable or disable logging to console (true/false)
+    logToConsole: true
+    # TCP port for client connections
+    clientTcpPort: 2181
+
+  # Additional environment variables for the ClickHouse Keeper pods
+  extraEnvVars: []
+  # - name: EXAMPLE_ENV_VAR
+  #   value: "example_value"
+  
+  # Storage specifications for ClickHouse Keeper pods
+  storage:
+    # Storage class for the persistent volume claim (PVC). If empty, the default storage class will be used.
+    storageClass: ""
+    # Size of the persistent volume claim (PVC) for ClickHouse Keeper data.
+    pvcStorage: "10Gi"
+    # Access modes for the persistent volume claim (PVC).
+    accessModes:
+      - ReadWriteOnce
+    # Reclaim policy for the persistent volume claim (PVC) post CHK deletion or uninstallation. Values can be Retain or Delete.
+    reclaimPolicy: "Retain"
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+ # PriorityClass for ClickHouse keeper pod(s)
+  priorityClassName: ""
+
+  # Set node selector for ClickHouse keeper pod(s)
+  nodeSelector: []
+    # "kubernetes.io/role": "worker"
+
+  # Set anti-affinity for ClickHouse keeper pod(s)
+  podAntiAffinity: {}
+    # "hard" or "soft"
+    # If set to "hard", it will enforce strict anti-affinity rules.
+    # If set to "soft", it will prefer but not require anti-affinity.
+    # type: "soft"
+
+    # topologyKey for anti-affinity (Default: "kubernetes.io/hostname")
+    # topologyKey: "kubernetes.io/hostname"
+
+  # Tolerations for ClickHouse keeper pod(s)
+  tolerations: []
+  # - key: "node.kubernetes.io/role"
+  #   operator: "Equal"
+  #   value: "worker"
+  #   effect: "NoSchedule"
+
+  # Additional settings for ClickHouse Keeper
+  additionalSettings: {}
+   
+serviceMonitor:
+  # serviceMonitor.enabled -- ServiceMonitor CRD is created for the prometheus operator
+  enabled: false

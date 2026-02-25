@@ -1,0 +1,299 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-user-authn-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-user-authn
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  iam_config: |
+    # The base path of dex and the external name of the OpenID Connect service.
+    # This is the canonical URL that all clients MUST use to refer to iam. If a
+    # path is provided, iam's HTTP service will listen at a non-root URL.
+    issuer: /api/iam/authn
+    infraTenantName: iamv2infra
+    sessionTTL: 15
+    samlEntityIssuer: iamV2
+    samlSignedEntityIssuer: IAMV2Signed
+    adminUserUUID: 00000000-0000-0000-0000-000000000000
+    expireAdminPasswordOnFirstLogin: true
+
+    # config applicable only for v4 APIs
+    v4ApiConfig:
+      schemaYamlsDir: /v4/schema_yamls
+      errorMsgDir: /v4/error_messages
+      circuitBreaker:
+        enableV4CircuitBreaker: true
+        configFile: /v4/circuit_breaker/circuit_breaker_config.yaml
+      maxPayloadSize:
+        request: 64000 # 64KB
+        getResp: 200000 # 200KB
+        listResp: 2000000 # 2MB
+        samlIdpApiRequest: 200000 # 200KB
+      truncateResponse: 
+        enableTruncateResponse: true
+        maxSize: 25 
+        maxDepth: 20
+      enableRateLimit: false
+      enableGzipCompression: true
+    samlCertificate: "/etc/ssl/saml_secrets/tls.crt"
+    samlPrivateKey: "/etc/ssl/saml_secrets/tls.key"
+
+    # IAM Intermediate CA private key and certificate chain file.
+    icaCert: /etc/sa_certs/tls.crt
+    icaPrivateKey: /etc/sa_certs/tls.key
+    iamAuthnCa: /etc/tls_certs/ca.crt
+    iamAuthnCert: /etc/tls_certs/tls.crt
+    iamAuthnPrivateKey: /etc/tls_certs/tls.key
+    audit:
+      type: LogBased
+
+    # RPC configuration for the grpc requests AuthN makes to
+    # proxy-control-plane to Add/Update/Delete cert_auth.
+    rpcMaxRetryCount: 5
+    rpcRetryIntervalInSec: 10
+
+    # The storage configuration determines where iam stores its state. Supported
+    # options include SQL flavors and Kubernetes third party resources.
+    #
+    # See the storage document at Documentation/storage.md for further information.
+    storage:
+      type: postgres
+      config:
+        database: nai_iam
+        searchPath: iam_user_authn
+        hostRo: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        hostWrite: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        port: {{ .Values.naiDatabase.postgresql.postgresPort }}
+        tls_mode: disable
+        ssl:
+          mode: {{ .Values.naiDatabase.postgresql.postgresSSLMode }}
+
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          caFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          keyFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          certFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          {{- end }}
+        {{- end }}
+        connectionRo:
+          maxOpen: 15
+          maxIdle: 5
+          maxLifetimeInMinutes: 5
+        connectionWrite:
+          maxOpen: 15
+          maxIdle: 5
+          maxLifetimeInMinutes: 5
+
+    # Configuration for the cache
+    cache:
+      type: redis
+      config:
+        masterName: mymaster
+        redisDeploymentType: sentinel
+        redisAddrs:
+        - redis-sentinel:26379
+        poolSize: 5
+        minIdleConns: 3
+        maxConnAgeInMinutes: 60
+        poolTimeoutInMinutes: 120
+        idleTimeoutInMinutes: 30
+        idleCheckFrequencyInSec: 60
+
+        maxRetries: 5
+        minRetryBackoffInMilSec: 100
+        maxRetryBackoffInMilSec: 500
+
+        dialTimeoutInSec: 30
+        readTimeoutInSec: 2
+        writeTimeoutInSec: 2
+
+
+    # Configuration for the HTTP endpoints.
+    web:
+      # Enable HTTPS options.
+      clientCertAuthHttps: 0.0.0.0:5556
+      tlsCert: /etc/tls_certs/tls.crt
+      tlsKey: /etc/tls_certs/tls.key
+      tlsClientCA: /etc/tls_certs/ca.crt
+      httpTimeouts:
+        readTimeoutSecs: 300
+        writeTimeoutSecs: 0
+        idleTimeoutSecs: 1500
+        idleTimeoutHttp2Secs: 3600 # assuming we have envoyproxy in front
+
+    health:
+      # Enable HTTP for liveness/readiness probe
+      http: 0.0.0.0:5559
+
+    # Configuration for telemetry
+    telemetry:
+      http: 0.0.0.0:5558
+
+    # Uncomment this block to enable configuration for the expiration time durations.
+    expiry:
+      signingKeys: "6h"
+      idTokens: "15m"
+      refreshTokens: "8h"
+      idleSession: "15m"
+      maxSessionLifetime: "8h"
+
+    # Duration for which expired keys will be kept
+    expiredKeyTTL: "240h"
+
+    # Options for controlling the logger.
+    logger:
+      level: "info"
+      format: "text" # can also be "json"
+
+    # Uncomment this block to control which response types iam supports. For example
+    # the following response types enable the implicit flow for web-only clients.
+    # Defaults to ["code"], the code flow.
+    oauth2:
+      responseTypes: ["code"]
+
+    # http client config to make mtls calls to other services
+    httpClientCredentials:
+      caFile: /etc/tls_certs/ca.crt
+      keyFile: /etc/tls_certs/tls.key
+      certFile: /etc/tls_certs/tls.crt
+
+    # Instead of reading from an external storage, use this list of clients.
+    #
+    # If this option isn't chosen clients may be added through the gRPC API.
+    staticClients:
+    - client_id: iam-ui
+      redirect_uris:
+      - 'https://*.master.dev.dev-iam.xi.nutanix.com/callback'
+      - '/'
+      client_name: 'IAM UI'
+
+    # The client which can impersonate users using the /token API.
+    impersonationServices: ["XPlayService"]
+
+    # IAM UI endpoint where oidc flow redirects to present login connector options
+    loginOptionsURL: /ui/iam/providers
+
+    # IAM UI endpoint point where ui hosts login page primarily used for AD/LDAP login
+    loginURL: /ui/iam/login
+
+    # Let iam keep a list of passwords which can be used to login to iam.
+    enablePasswordDB: true
+
+    # Disbale Domain Validation primarliy for AD/LDAP create and Update Workflow
+    # set Disable domain validation flag in ldapConnParams to true if need to restrict down the search.
+    ldapConnectionCfg:
+      disableDomainValidation: false
+
+    # Configuration to connect to Athena for local user authentication.
+    # Set federated flag to true and replace athenaSvcIp with the PC IP.
+    localUserCfg:
+      federated: false
+
+    # Configuration for cache TTL in seconds
+    cacheTTLSeconds:
+      accessKeyCache: 0
+      idTokenCache: 0
+      identityCache: 0
+      jwtCache: 0
+      refreshTokenCache: 180
+      verificationKeyCache: 900
+
+    # cost used for bcrypt hash computation
+    bcryptHashCost: 8
+
+    # let IAM set up federation with another IAM
+    enableFederation: true
+
+    # password restricted flag and restricted keywords list.
+    pwdRestrictedFlag : false
+    pwdRestrictedKeywords: ["ntnx","nutanix","password"]
+
+    # authorization config used for seeding entities at init time
+    # and authorize REST API calls.
+    authZConfig:
+      disabled: false
+      # Change after Themis service can handle non default service names
+      # serviceName: iam-user-authn
+      serviceName: Test_Service
+      basePath: api/iam/authz/v1
+      svcHost: iam-proxy:8445
+      scheme: https
+      templateLocation: "/templates/"
+      endPointsList:
+      - endpoint: "/api/iam/authn/v1/directory_services"
+        methodOperationList:
+        - method: GET
+          operation: connector-view
+        - method: POST
+          operation: connector-mgmt
+        - method: PUT
+          operation: connector-mgmt
+        - method: DELETE
+          operation: connector-mgmt
+      - endpoint: "/api/iam/authn/v1/saml_identity_providers"
+        methodOperationList:
+        - method: GET
+          operation: connector-view
+        - method: POST
+          operation: connector-mgmt
+        - method: PUT
+          operation: connector-mgmt
+        - method: DELETE
+          operation: connector-mgmt
+      - endpoint: "/api/iam/authn/v1/users"
+        methodOperationList:
+        - method: GET
+          operation: principal-view
+        - method: POST
+          operation: principal-mgmt
+        - method: PUT
+          operation: principal-mgmt
+        - method: DELETE
+          operation: principal-mgmt
+      - endpoint: "/api/iam/authn/v1/service_accounts"
+        methodOperationList:
+        - method: GET
+          operation: principal-view
+        - method: POST
+          operation: principal-mgmt
+        - method: PUT
+          operation: principal-mgmt
+        - method: DELETE
+          operation: principal-mgmt
+      - endpoint: "/api/iam/authn/v1/oidc/clients"
+        methodOperationList:
+        - method: GET
+          operation: infra-view
+        - method: POST
+          operation: infra-mgmt
+        - method: PUT
+          operation: infra-mgmt
+        - method: DELETE
+          operation: infra-mgmt
+      - endpoint: "/api/iam/authn/v1/tenants"
+        methodOperationList:
+        - method: GET
+          operation: infra-view
+        - method: POST
+          operation: infra-mgmt
+        - method: PUT
+          operation: infra-mgmt
+        - method: DELETE
+          operation: infra-mgmt
+
+    # Cloud-IAM specific configs
+    cloudDeployment: false
+    # Set of product to choose from NC, PC, XI
+    product: PC
+
+    setUserProfileInToken: false
+
+    tracer_config:
+      type: pc
+      service_name: authn_service

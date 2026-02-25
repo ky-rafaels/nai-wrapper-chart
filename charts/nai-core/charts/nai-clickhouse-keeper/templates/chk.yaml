@@ -1,0 +1,107 @@
+{{ $ch_keeper_name := include "clickhouse-keeper.name" . }}
+apiVersion: "clickhouse-keeper.altinity.com/v1"
+kind: "ClickHouseKeeperInstallation"
+metadata:
+  name: {{ $ch_keeper_name }}
+  labels:
+    {{- include "clickhouse-keeper.labels" . | nindent 4 }}
+  annotations:
+    {{- include "clickhouse-keeper.annotations" . | nindent 4}}
+  namespace: {{ template "clickhouse-keeper.namespace" . }}
+spec:
+  configuration:
+    clusters:
+      - name: {{ .Values.clickhouseKeeper.clusterName }}
+        layout:
+          replicasCount: {{ .Values.clickhouseKeeper.replicas }}
+    settings:
+    {{- include "clickhouse-keeper.settings" . | nindent 6 }}
+  defaults:
+    templates:
+      # Templates are specified as default for all clusters
+      podTemplate: {{ $ch_keeper_name }}-pod
+      dataVolumeClaimTemplate: keeper-datadir-volume
+      serviceTemplate: {{ $ch_keeper_name }}-svc
+  templates:
+    # set serviceTemplate to generate service with desired spec as part of chk installation
+    serviceTemplates:
+      - name: {{ $ch_keeper_name }}-svc
+        generateName: clickhouse-chk-svc
+        metadata:
+          labels:
+            {{- include "clickhouse-keeper.labels" . | nindent 12 }}
+          annotations:
+          {{- include "clickhouse-keeper.annotations" . | nindent 12 -}}
+          {{- include "clickhouse-keeper-servicemonitor.annotations" . | indent 12 }}
+        spec:
+          type: {{ .Values.clickhouseKeeper.service.type }}
+          selector:
+            {{- include "clickhouse-keeper.selectorLabels" . | nindent 12 }}
+          {{- include "clickhouse-keeper.service-ports" . | nindent 10 }}
+    podTemplates:
+      - name: {{ $ch_keeper_name }}-pod
+        metadata:
+          labels:
+            {{- include "clickhouse-keeper.labels" . | nindent 12 }}
+          annotations:
+          {{- include "clickhouse-keeper.annotations" . | nindent 12 }}
+        spec:
+          {{- if .Values.clickhouseKeeper.tolerations }}
+          tolerations:
+          {{- toYaml .Values.clickhouseKeeper.tolerations | nindent 12 }}
+          {{- end }}
+          {{- if .Values.clickhouseKeeper.nodeSelector }}
+          nodeSelector:
+          {{- toYaml .Values.clickhouseKeeper.nodeSelector | nindent 12 }}
+          {{- end }}
+          {{- if .Values.clickhouseKeeper.podAntiAffinity }}
+          affinity:
+            podAntiAffinity:
+          {{- if eq .Values.clickhouseKeeper.podAntiAffinity.type "hard" }}
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    {{- include "clickhouse-keeper.selectorLabels" . | nindent 20 }}
+                topologyKey: {{ .Values.clickhouseKeeper.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+          {{- else if eq .Values.clickhouseKeeper.podAntiAffinity.type "soft" }}
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 1
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      {{- include "clickhouse-keeper.selectorLabels" . | nindent 20 }}
+                  topologyKey: {{ .Values.clickhouseKeeper.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.clickhouseKeeper.priorityClassName }}
+          priorityClassName: {{ .Values.clickhouseKeeper.priorityClassName }}
+          {{- end }}
+          {{- if .Values.clickhouseKeeper.imagePullSecrets }}
+          imagePullSecrets:
+          {{- range .Values.clickhouseKeeper.imagePullSecrets }}
+          - name: {{ . }}
+          {{- end }}
+          {{- end }}
+          containers:
+            - name: clickhouse-keeper
+              imagePullPolicy: {{ .Values.clickhouseKeeper.image.imagePullPolicy }}
+              image: {{ .Values.clickhouseKeeper.image.registry }}/{{ .Values.clickhouseKeeper.image.repository }}:{{ .Values.clickhouseKeeper.image.tag }}
+              {{- if .Values.clickhouseKeeper.extraEnvVars }}
+              env:
+              {{- toYaml .Values.clickhouseKeeper.extraEnvVars | nindent 16 }}
+              {{- end }}
+              {{- if .Values.clickhouseKeeper.resources }}
+              resources:
+              {{- toYaml .Values.clickhouseKeeper.resources | nindent 16 }}
+              {{- end }}
+          securityContext:
+            fsGroup: 101
+    volumeClaimTemplates:
+      - name: keeper-datadir-volume
+        spec:
+          storageClassName: {{ .Values.clickhouseKeeper.storage.storageClass | default "default" }}
+          accessModes:
+          {{- toYaml .Values.clickhouseKeeper.storage.accessModes | nindent 12 }}
+          resources:
+            requests:
+              storage: {{ .Values.clickhouseKeeper.storage.pvcStorage }}

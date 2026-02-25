@@ -1,0 +1,592 @@
+# Labels common to add components of nai-core
+labels:
+  app.kubernetes.io/name: nai-iep
+
+# These gateways determine the entry points for your traffic.
+gateway:
+  createGatewayClass: true
+  gatewayClassName: nai-gatewayclass
+
+# Image pull secret Details
+imagePullSecret:
+  # Name of the image pull secret
+  name: nai-iep-secret
+  # Image registry credentials
+  credentials:
+    registry: https://index.docker.io/v1/
+    username: USERNAME
+    password: PASSWORD
+    email: EMAIL
+
+# Storage class name to be used by nai-db
+defaultStorageClassName: ""
+
+naiIepOperator:
+  # IEP operator image details
+  iepOperatorImage:
+    # IEP operator image name
+    image: docker.io/nutanix/nai-iep-operator
+    # IEP operator image tag
+    tag: v2.5.0
+  
+  iepOperatorResources:
+    limits:
+      cpu: 500m
+      memory: 500Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+
+  # Model processor image details
+  modelProcessorImage:
+    # Model Processor image name
+    image: docker.io/nutanix/nai-model-processor
+    # Model Processor image tag
+    tag: v2.5.0
+
+  # Configuration for resource limits and requests for the model processor.
+  modelProcessorResources:
+    limits:
+      cpu: ""
+      memory: ""
+    requests:
+      cpu: ""
+      memory: ""
+  
+  # Determines whether the model processor job should be retained after completion.
+  # Acceptable values:
+  # - true: Retain the job after completion.
+  # - false: Delete the job after completion.
+  retainModelProcessorJob: false
+
+  # Determines whether the model processor job should be run with non root user.
+  # Acceptable values:
+  # - true: Run container with non root user (nobody).
+  # - false: Run container with root user.
+  runModelProcessorAsNonRoot: false
+
+  # Retention time in seconds for completed model processor jobs.
+  # This setting determines how long Kubernetes will keep the job after completion.
+  # Default value: 86400 (24 hours)
+  # If jobs are retained either due to failure or due to the setting of retainModelProcessorJob, the job will be deleted after the retention time.
+  modelProcessorJobRetentionSeconds: 86400
+
+naiJobs:
+  naiJobsImage:
+    image: docker.io/nutanix/nai-jobs
+    tag: v2.5.0
+
+  # Resources for nai-jobs container
+  resources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+naiInferenceUi:
+  # NAI UI image details
+  naiUiImage:
+    # The name of the NAI UI Docker image
+    image: docker.io/nutanix/nai-inference-ui
+    # The tag of the Docker image to be used
+    tag: v2.5.0
+  
+  # Resources for nai-ui container
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 2Gi   
+
+  # The URL for the NAI API service
+  naiApiUrl: "http://nai-api.nai-system.svc.cluster.local:7000"
+
+naiApi:
+  # NAI API image details
+  naiApiImage:
+    # The name of the NAI API Docker image
+    image: docker.io/nutanix/nai-api
+    # The tag of the Docker image to be used
+    tag: v2.5.0
+
+  # Resources for nai-api container
+  naiApiResources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 8
+      memory: 4Gi
+  
+  naiMigrateInitContainerResources:
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      cpu: 1
+      memory: 1Gi   
+  
+  # Resources for nai-api-db-migrate job container
+  naiMigrateJobResources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  
+  # Logger configuration for nai-api
+  logger:
+    # Log level for nai-api
+    # Acceptable values: "debug", "info", "warn", "error"
+    logLevel: "info"
+
+  # Storage class name to be used nai-iep for storing models
+  storageClassName: nai-nfs-storage
+
+  # supportedKserveRuntimeVersion Image in model catalog
+  supportedKserveRuntimeImage: "docker.io/nutanix/nai-kserve-huggingfaceserver"
+  supportedKserveCPURuntimeImageTag: "v0.15.2"
+  supportedKserveGPURuntimeImageTag: "v0.15.2-gpu"
+
+  # supportedVLLMImage in model catalog
+  supportedVLLMImage: docker.io/nutanix/nai-vllm # TODO: Update after pushing to dockerhub
+  supportedVLLMCPUImageTag: v0.10.2
+  supportedVLLMGPUImageTag: v0.10.2-gpu
+
+  # supportedKserveCustomModelServerRuntime
+  supportedKserveCustomModelServerRuntimeImage: "docker.io/nutanix/nai-kserve-custom-model-server"
+  supportedKserveCustomModelServerRuntimeImageTag: "v2.5.0"
+
+  #supportedTGIRuntimeImage
+  supportedTGIImage: "docker.io/nutanix/nai-tgi"
+  supportedTGIImageTag: "3.3.4-b2485c9"
+
+naiAIGateway:
+  enabled: false
+
+  naiExtAuthSecurityPolicy:
+    bodySizeLimit: 5048576
+  
+naiDatabase:
+  external: false
+  naiDbImage:
+    # The name of the NAI DB Docker image
+    image: docker.io/nutanix/nai-postgres:16.1-alpine
+
+  # Postgres sql details
+  postgresql:
+    postgresUser: nai-api-user
+    postgresPassword: nai-api-password
+    postgresDatabase: nai_iep
+    postgresPort: "5432"
+    postgresHost: nai-db.nai-system
+
+    # SSL mode for postgres connection
+    # Acceptable values: "disable", "allow", "prefer", "require", "verify-ca", "verify-full"
+    # Default value: "" (empty string) Let Postgres decide the SSL mode
+    # disable – No SSL
+    # allow – SSL if available, but not required
+    # prefer – use SSL first, if failed fallback to plain conection (default)
+    # require – Always use SSL (no verification)
+    # verify-ca – SSL + certificate authority verification
+    # verify-full – SSL + CA + host name verification
+    
+    # K8s secret named "nai-db-certs" with certificates for SSL connection to be created in the nai-system namespace
+    # Override the following values as required
+    # - "naiDatabase.postgresql.postgresSSLMode"
+    # - "naiDatabase.postgresql.postgresSSLSecretName"
+    # - "naiDatabase.postgresql.postgresSSLRootCertName"
+    # - "naiDatabase.postgresql.postgresSSLClientCertName"
+    # - "naiDatabase.postgresql.postgresSSLClientKeyName"
+    postgresSSLMode: "disable"
+    postgresSSLSecretName: nai-db-certs
+    postgresSSLRootCertName: ""
+    postgresSSLClientCertName: ""
+    postgresSSLClientKeyName: "" 
+  
+  # Resources for nai-db container
+  resources:
+    requests:
+      cpu: 2
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+  
+  # Storage spec for of nai-db
+  storageSpec:
+    resources:
+      requests:
+        storage: 4Gi  
+
+# Values for nai-monitoring stack deployment.
+naiMonitoring:
+  # OpenTelemetry configuration
+  opentelemetry:
+    # Image for otel collector
+    collectorImage: docker.io/nutanix/nai-opentelemetry-collector-contrib:0.136.0
+    # Image for otel target allocator
+    targetAllocator:
+      image:
+        repository: docker.io/nutanix/nai-target-allocator
+        tag: 0.136.0
+      resources:
+        requests:
+          cpu: 0.5
+          memory: 100Mi
+        limits:
+          cpu: 1
+          memory: 500Mi
+    storageClassName: nai-nfs-storage
+    common:
+      resources:
+        requests:
+          cpu: 2
+          memory: 500Mi
+        limits:
+          cpu: 4
+          memory: 2Gi
+      storageSpec:
+        resources:
+          requests:
+            storage: 1Gi
+
+    # Audit Logs Rsyslog otel collector
+    rsyslogAuditLogsExport:
+      # Resources for audit logs otel collector pod
+      resources:
+        requests:
+          cpu: 2
+          memory: 450Mi
+        limits:
+          cpu: 3
+          memory: 1Gi
+      # PVC storage spec
+      storageSpec:
+        resources:
+          requests:
+            storage: 1Gi
+      
+  ## Component scraping node exporter
+  nodeExporter:
+    serviceMonitor:
+      enabled: true
+      endpoint:
+        port: http-metrics
+        scheme: http
+        targetPort: 9100
+      namespaceSelector:
+        matchNames:
+        - prometheus
+      serviceSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus-node-exporter
+          app.kubernetes.io/component: metrics
+
+  ## Component scraping dcgm exporter
+  dcgmExporter:
+    serviceMonitor:
+      enabled: true
+      endpoint:
+        targetPort: 9400
+      namespaceSelector:
+        matchNames:
+        - gpu-operator
+      serviceSelector:
+        matchLabels:
+          app: nvidia-dcgm-exporter
+  
+  ## Component scraping llm metrics exporter
+  llmMetricsExporter:
+    tgi:
+      serviceMonitor:
+        enabled: true
+        endpoint:
+          targetPort: 8080
+        namespaceSelector:
+          matchNames:
+          - nai-admin
+        serviceSelector:
+          matchLabels:
+            endpoint.iep.nai.nutanix.com/engine: tgi
+    nim:
+      serviceMonitor:
+        enabled: true
+        endpoint:
+          targetPort: 8000
+          path: /v1/metrics
+        namespaceSelector:
+          matchNames:
+          - nai-admin
+        serviceSelector:
+          matchLabels:
+            endpoint.iep.nai.nutanix.com/engine: nim
+    vllm:
+      serviceMonitor:
+        enabled: true
+        endpoint:
+          targetPort: 8000
+        namespaceSelector:
+          matchNames:
+          - nai-admin
+        serviceSelector:
+              matchExpressions:
+              - { key: endpoint.iep.nai.nutanix.com/engine, operator: In, values: [vllm, vllm-cpu] }
+
+naiIam:
+  # IAM Proxy image details
+  iamProxy:
+    image: docker.io/nutanix/nai-iam-proxy
+    tag: v2.5.0
+
+  # Resources for iam-proxy container
+  iamProxyResources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 32Mi
+
+  # IAM Proxy Control Plane image details
+  iamProxyControlPlane:
+    image: docker.io/nutanix/nai-iam-proxy-control-plane
+    tag: v2.5.0
+
+  # Resources for iam-proxy-control-plane container
+  iamProxyControlPlaneResources:
+    limits:
+      cpu: 200m
+      memory: 64Mi
+    requests:
+      cpu: 100m
+      memory: 16Mi
+
+  iamUi:
+    image: docker.io/nutanix/nai-iam-ui
+    tag: v2.5.0
+
+  # Resources for iam-ui container
+  iamUiResources:
+    limits:
+      cpu: 300m
+      memory: 128Mi
+    requests:
+      cpu: 150m
+      memory: 64Mi
+
+  iamUserAuthn:
+    image: docker.io/nutanix/nai-iam-user-authn
+    tag: v2.5.0
+
+  # Resources for iam-user-authn container
+  iamUserAuthnResources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 16Mi
+
+  # IAM Themis image details
+  iamThemis:
+    image: docker.io/nutanix/nai-iam-themis
+    tag: v2.5.0
+
+  # Resources for iam-themis container
+  iamThemisResources:
+    limits:
+      cpu: 400m
+      memory: 128Mi
+    requests:
+      cpu: 200m
+      memory: 64Mi
+
+  iamThemisBootstrap:
+    image: docker.io/nutanix/nai-iam-bootstrap # TODO: Update after pushing to dockerhub
+    tag: v2.5.0
+
+  # Resources for iam-themis-bootstrap container
+  iamThemisBootstrapResources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 32Mi
+
+# OAuth2 Proxy configuration
+oauth2-proxy:
+
+  fullnameOverride: nai-oauth2-proxy
+
+  image:
+    repository: "docker.io/nutanix/nai-oauth2-proxy"
+    tag: "v7.9.0"
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 600Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+
+  imagePullSecrets:
+    - name: nai-iep-secret
+
+  config:
+    # Read cookie-secret, client-id and client-secret from the this secret
+    existingSecret: "nai-oidc-secret"
+
+  # https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview
+  extraArgs:
+    provider: "oidc"
+
+    # PKCE support
+    code-challenge-method: "S256"
+
+    # pass OIDC IDToken to upstream via Authorization Bearer header
+    pass-authorization-header: true
+
+    # use sub claim to uniquely identify the user
+    oidc-email-claim: "sub"
+
+    skip-provider-button: true
+    cookie-expire: "600s"
+    cookie-refresh: "300s"
+
+    # Kept the scope same as PC
+    scope: "openid profile offline_access email groups"
+
+    # https://oauth2-proxy.github.io/oauth2-proxy/7.0.x/configuration/overview/#upstreams-configuration
+    upstream: "http://nai-api.nai-system.svc.cluster.local:7000/enterpriseai/v1/,http://nai-api.nai-system.svc.cluster.local:7000/api/enterpriseai/v1/,http://nai-ui.nai-system.svc.cluster.local:1900/nai/,https://iam-proxy.nai-system.svc.cluster.local:443/api/iam/"
+
+    # No login redirection will occur for requests matching these path prefixes. Return 401 if the cookie is expired.
+    api-route: "/api/enterpriseai/v1/,/enterpriseai/v1/,/api/iam/"
+
+    # Skip SSL verification between oauth2-proxy and IAM
+    ssl-insecure-skip-verify: true
+
+    # This is required as IAM team recommends to use v4.1.b1 version of the IAM API
+    # but the response of .well-known/openid-configuration contains issuer as v1
+    # This is kept intentionally to avoid breaking the SAML workflow with each upgrade
+    insecure-oidc-skip-issuer-verification: true
+
+    # oidc discovery is skipped as userinfo endpoint is not supported in v4.1.b1 version of the IAM API
+    # hence we need to pass the issuer url, login url, redeem url, jwks url manually
+    skip-oidc-discovery: true
+    # Since we skip oidc discovery, we need to pass the issuer url, login url, redeem url, jwks url manually
+    oidc-issuer-url: "https://iam-proxy.nai-system.svc.cluster.local:443/api/iam/v4.1.b1/authn"
+    login-url: "/api/iam/authn/v1/oidc/auth"
+    redeem-url: "https://iam-proxy.nai-system.svc.cluster.local:443/api/iam/v4.1.b1/authn/oidc/token"
+    oidc-jwks-url: "https://iam-proxy.nai-system.svc.cluster.local:443/api/iam/v4.1.b1/authn/oidc/keys"
+
+    # Used in auth code flow request to IAM API
+    redirect-url: "/oauth2/callback"
+    relative-redirect-url: true
+
+    # Mount error template
+    custom-templates-dir: "/templates"
+
+    # Disable ping logging to prevent log flooding
+    silence-ping-logging: true
+
+  # Mount error template
+  extraVolumes:
+    - name: oauth2-proxy-error-template
+      configMap:
+        name: oauth2-proxy-error-template
+
+  # Mount error template
+  extraVolumeMounts:
+    - name: oauth2-proxy-error-template
+      mountPath: /templates
+      readOnly: true
+
+nai-clickhouse-keeper:
+  clickhouseKeeper:
+    image:
+      registry: docker.io
+      repository: nutanix/nai-clickhouse-keeper
+      tag: 25.3.5.42
+    imagePullSecrets:
+      - nai-iep-secret
+    storage:
+      storageClass: nutanix-volume # Storage class to be used by nai-clickhouse-keeper
+      reclaimPolicy: Delete # Delete PVC when nai-clickhouse-keeper is deleted/uninstalled
+
+nai-clickhouse-server:
+  clickhouse:
+    image:
+      registry: docker.io
+      repository: nutanix/nai-clickhouse-server
+      tag: 25.3.5.42
+    imagePullSecrets:
+      - nai-iep-secret
+    initContainers:
+      addUdf:
+        image:
+          registry: docker.io
+          repository: nutanix/nai-clickhouse-udf
+          tag: v2.5.0
+      waitForKeeper:
+        image:
+          registry: docker.io
+          repository: nutanix/nai-jobs
+          tag: v2.5.0
+    users:
+      admin:
+        username: nai-clickhouse-user
+        password: nai-clickhouse-password
+    storage:
+      storageClass: nutanix-volume # Storage class to be used by nai-clickhouse-server
+      reclaimPolicy: Delete # Delete PVC when nai-clickhouse-server is deleted/uninstalled
+      pvcStorage: "50Gi"
+    resources:
+      limits:
+        cpu: 8
+        memory: 8Gi
+      requests:
+        cpu: 4
+        memory: 8Gi
+
+nai-clickhouse-schemas:
+  image:
+    registry: docker.io
+    repository: nutanix/nai-clickhouse-schemas
+    tag: 1.0.10
+  imagePullSecrets:
+    - nai-iep-secret
+
+# NAI Labs Configuration
+naiLabs:
+  # Enable/disable the nai-labs deployment
+  enabled: true
+
+  # Image configuration  
+  labsImage:
+    # The name of the NAI Labs Docker image
+    image: docker.io/nutanix/nai-rag-app
+    # The tag of the Docker image to be used
+    tag: v2.5.0
+  
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "6Gi"
+      cpu: "1500m"
+
+  # Storage spec for nai-labs data
+  storageSpec:
+    resources:
+      requests:
+        storage: 20Gi

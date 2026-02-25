@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-clickhouse-schema-job-{{ now | unixEpoch }}
+  namespace: {{ template "clickhouse-schemas.namespace" . }}
+  annotations:
+    {{- include "clickhouse-schemas.annotations" . | nindent 4}}
+  labels:
+    {{- include "clickhouse-schemas.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.backoffLimit | default 3 }}
+  completions: 1
+  parallelism: 1
+  suspend: {{ .Values.suspendMigrationJob | default false }}
+  template:
+    spec:
+      {{- if .Values.tolerations }}
+      tolerations:
+      {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: database-migration
+        image: {{.Values.image.registry}}/{{.Values.image.repository}}:{{.Values.image.tag}}
+        imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+        env:
+        - name: CH_HOST
+          value: {{ .Values.clusterName }}-ep
+        - name: CH_CLUSTER
+          value: {{ .Values.clusterName }}
+        - name: CH_USER
+          valueFrom:
+            secretKeyRef:
+              name: ch-admin
+              key: CH_USER
+        - name: CH_PASS
+          valueFrom:
+            secretKeyRef:
+              name: ch-admin
+              key: CH_PASS
+        - name: CH_CLUSTER_SHARD
+          valueFrom:
+            configMapKeyRef:
+              name: ch-cluster-settings
+              key: shards
+        - name: CH_CLUSTER_REPLICA
+          valueFrom:
+            configMapKeyRef:
+              name: ch-cluster-settings
+              key: replicas
+        - name: WAIT_INTERVAL
+          value: {{ .Values.waitInterval | quote }}
+        resources:
+          limits:
+            memory: 250Mi
+          requests:
+            cpu: 100m
+            memory: 40Mi
+      restartPolicy: OnFailure
+      terminationGracePeriodSeconds: 0

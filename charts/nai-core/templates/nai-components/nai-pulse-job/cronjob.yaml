@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nai-pulse-job
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: "5 0 * * *"
+  timeZone: "UTC"
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400  # Job (and pods) will be deleted  after 1 day of completion
+      template:
+        spec:
+          containers:
+          - name: nai-api
+            image: {{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}
+            imagePullPolicy: IfNotPresent
+            command: ["./nai-iep", "pulse", "--c", "/etc/config/nai/config.json", "--m", "/etc/config/nai/model_config.json"]
+            envFrom:
+              - secretRef:
+                  name: nai-db-creds
+              - secretRef:
+                  name: nai-clickhouse-creds
+              - secretRef:
+                  name: nai-default-user
+              - configMapRef:
+                  name: nai-storage-config
+            volumeMounts:
+              - name: nai-api-config-volume
+                mountPath: /etc/config/nai
+            {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+              - name: nai-db-certs-volume
+                mountPath: /etc/ssl/certs
+                readOnly: true
+            {{- end }}
+          restartPolicy: OnFailure
+          serviceAccountName: nai-api-sa
+          volumes:
+          # Updates config file during runtime as well
+            - name: nai-api-config-volume
+              configMap:
+                name: nai-api-config
+          {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+            - name: nai-db-certs-volume
+              secret:
+                secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+                defaultMode: 420
+          {{- end }}
+

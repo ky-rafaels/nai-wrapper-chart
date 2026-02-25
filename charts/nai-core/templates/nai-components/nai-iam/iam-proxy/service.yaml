@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    # TODO: remove these labels
+    run: iam-proxy
+    k8s-app: iam-proxy
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: iam-proxy
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8080
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 8443
+  - name: mtls
+    port: 8445
+    protocol: TCP
+    targetPort: 8445
+  # In PC, this service is load balancer, TODO: review this
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-proxy-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    # TODO: remove these labels
+    run: iam-proxy-admin
+    k8s-app: iam-proxy-admin
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: iam-proxy
+  ports:
+  - name: admin
+    port: 8001
+    protocol: TCP
+    targetPort: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-proxy-cac
+  namespace: {{ .Release.Namespace }}
+  labels:
+    # TODO: remove these labels
+    run: iam-proxy-cac
+    k8s-app: iam-proxy-cac
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: iam-proxy
+  ports:
+  - name: cac
+    port: 9441
+    protocol: TCP
+    targetPort: 9441
+  - name: sa-mtls
+    port: 9442
+    protocol: TCP
+    targetPort: 9442
+  # In PC, this service is load balancer, TODO: review this
+  type: ClusterIP

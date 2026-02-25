@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-version
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  iam_version: |
+    version: 2025.1.0.0.1748040632
+    docker_images:
+      iam_user_authn: {{ .Values.naiIam.iamUserAuthn.image }}:{{ .Values.naiIam.iamUserAuthn.tag }}
+      iam_ui: {{ .Values.naiIam.iamUi.image }}:{{ .Values.naiIam.iamUi.tag }}
+      iam_proxy: {{ .Values.naiIam.iamProxy.image }}:{{ .Values.naiIam.iamProxy.tag }}
+      iam_proxy_control_plane: {{ .Values.naiIam.iamProxyControlPlane.image }}:{{ .Values.naiIam.iamProxyControlPlane.tag }}
+      iam_themis: {{ .Values.naiIam.iamThemis.image }}:{{ .Values.naiIam.iamThemis.tag }}

@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-api-db-migrate-{{ randAlphaNum 5 | lower }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 15
+  template:
+    spec:
+      # NAI Jobs container runs as non root user
+      # Since k8s mount volumes as root, we need to set the fsGroup to 1000
+      # TODO: Remove this when we remove the iam migration container
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: iam-migrate
+          image: {{ .Values.naiJobs.naiJobsImage.image }}:{{ .Values.naiJobs.naiJobsImage.tag }}
+          resources:
+            {{- toYaml .Values.naiJobs.resources | nindent 12 }}
+          command: ["python", "-m", "handlers", "iam-migration", "--iam-mtls-host", "https://iam-proxy.{{ .Release.Namespace }}.svc.cluster.local:8445", "--iam-cert-dir", "/etc/ssl/mtls_certs"]
+          envFrom:
+            - secretRef:
+                name: nai-db-creds
+          env:
+            - name: POSTGRES_NAI_DB
+              value: nai_iep
+            - name: POSTGRES_IAM_DB
+              value: nai_iam
+          volumeMounts:
+            - name: nai-migrate-iam-proxy-mtls-cert
+              mountPath: /etc/ssl/mtls_certs
+              readOnly: true
+          {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+            - name: nai-db-certs-volume
+              mountPath: /etc/ssl/certs
+              readOnly: true
+          {{- end }}
+      containers:
+        - name: nai-migrate
+          image: {{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}
+          resources:
+            {{- toYaml .Values.naiApi.naiMigrateJobResources | nindent 12 }}
+          command: ["./nai-iep", "migrate", "run", "--c", "/etc/config/nai/config.json", "--m", "/etc/config/nai/model_config.json"]
+          envFrom:
+            - secretRef:
+                name: nai-db-creds
+            - secretRef:
+                name: nai-default-user
+          volumeMounts:
+            - name: nai-api-config-volume
+              mountPath: /etc/config/nai
+          {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+            - name: nai-db-certs-volume
+              mountPath: /etc/ssl/certs
+              readOnly: true
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+      serviceAccountName: nai-api-sa
+      volumes:
+        - name: nai-api-config-volume
+          configMap:
+            name: nai-api-config
+        - name: nai-migrate-iam-proxy-mtls-cert
+          secret:
+            secretName: nai-migrate-iam-proxy-mtls-cert
+            defaultMode: 420
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+        - name: nai-db-certs-volume
+          secret:
+            secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+            defaultMode: 384 # this will give 0600 permission octal to decimal
+      {{- end }}
+      restartPolicy: OnFailure

@@ -1,0 +1,45 @@
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nai-gpu-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - interval: 30s
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.targetPort }}
+    targetPort: {{ .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.targetPort }}
+{{- end }}
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.path }}
+    path: {{ .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.path }}
+{{- end }}
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.port }}
+    port: {{ .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.port }}
+{{- end }}
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.scheme }}
+    scheme: {{ .Values.naiMonitoring.dcgmExporter.serviceMonitor.endpoint.scheme }}
+{{- end }}
+    relabelings:
+    - action: replace
+      regex: (.*)
+      replacement: $1
+      sourceLabels:
+      - __meta_kubernetes_pod_node_name
+      targetLabel: instance
+    metricRelabelings:
+    - action: keep
+      sourceLabels:
+      - __name__
+      regex: 'DCGM_FI_DEV_(GPU_UTIL|FB_.*)'
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.namespaceSelector }}
+  namespaceSelector:
+{{ toYaml .Values.naiMonitoring.dcgmExporter.serviceMonitor.namespaceSelector | indent 4}}
+{{- end }}
+{{- if .Values.naiMonitoring.dcgmExporter.serviceMonitor.serviceSelector }}
+  selector:
+{{ toYaml .Values.naiMonitoring.dcgmExporter.serviceMonitor.serviceSelector | indent 4}}
+{{- end }}
+{{- end }}

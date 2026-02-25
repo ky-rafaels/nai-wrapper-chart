@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nai-otel-pvc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: opentelemetry
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  storageClassName: {{ .Values.naiMonitoring.opentelemetry.storageClassName }}
+  accessModes:
+  - ReadWriteMany
+  resources:
+    {{- toYaml .Values.naiMonitoring.opentelemetry.common.storageSpec.resources | nindent 4 }}

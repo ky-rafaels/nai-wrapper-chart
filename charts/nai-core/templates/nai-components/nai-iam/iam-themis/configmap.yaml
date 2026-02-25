@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-themis-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-themis
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  iam_themis_config: |
+    web:
+      clientCertAuthHttps: 0.0.0.0:5558
+      httpTimeouts:
+        readTimeoutSecs: 300
+        writeTimeoutSecs: 0
+        idleTimeoutSecs: 1500
+        idleTimeoutHttp2Secs: 3600 # assuming we have envoyproxy in front
+      tlsCert: /etc/ssl/tls_secrets/tls.crt
+      tlsKey: /etc/ssl/tls_secrets/tls.key
+      tlsClientCA: /etc/ssl/tls_secrets/ca.crt
+    health:
+      # Enable HTTP for liveness/readiness probe
+      http: 0.0.0.0:5559
+    telemetry:
+      http: 0.0.0.0:5560
+    authorization:
+      optimizedResults: true
+      ttlInSecs: 300
+      cacheTtlInSecs: 900
+      loadData: false
+    storage:
+      db_type: postgres
+      config:
+        database: nai_iam
+        searchPath: iam_themis
+        hostRo: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        hostWrite: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        port: {{ .Values.naiDatabase.postgresql.postgresPort }}
+
+        tls_mode: disable
+        retryAttempts: 1
+        delayInMillisecs: 10
+        maximumDelayInMillisecs: 100
+        ssl:
+          mode: {{ .Values.naiDatabase.postgresql.postgresSSLMode }}
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          caFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          keyFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          certFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          {{- end }}
+        {{- end }}
+        connectionRo:
+          maxOpen: 30
+          maxIdle: 10
+          maxLifetimeInMinutes: 5
+        connectionWrite:
+          maxOpen: 30
+          maxIdle: 10
+          maxLifetimeInMinutes: 5
+
+    domain: non-ha-lb.xi.nutanix.com
+    externalStorage:
+      enabled: false
+      db_type: zk
+      database: zk
+      port: 9876
+      paths:
+        - name: "userRepo"
+          path: "/appliance/physical/userrepository"
+        - name: "roleMapping"
+          path: "/appliance/logical/prism/rolemapping"
+
+    logger:
+      level: "DEBUG"
+      format: "text" # can be "json"
+
+    requestTimeoutInSecs:
+      generic: 60s
+      authorize: 10s
+
+    audit:
+      type: LogBased
+      logFilePath: ""
+
+    # Configuration for the cache
+    cache:
+      type: redis
+      config:
+        masterName: mymaster
+        redisDeploymentType: sentinel
+        redisAddrs:
+        - redis-sentinel:26379
+        poolSize: 5
+        minIdleConns: 3
+        maxConnAgeInMinutes: 60
+        poolTimeoutInMinutes: 120
+        idleTimeoutInMinutes: 30
+        idleCheckFrequencyInSec: 60
+
+        maxRetries: 5
+        minRetryBackoffInMilSec: 100
+        maxRetryBackoffInMilSec: 500
+
+        dialTimeoutInSec: 30
+        readTimeoutInSec: 2
+        writeTimeoutInSec: 2
+
+    iamVersionFilePath: "/etc/iam_version/..data/iam_version.yaml"
+
+    authorizeConcurrency: false
+
+    enableProfiling: false
+    # Enable feature flag api in themis, only in IAM build pipeline
+    enableFeatureFlagAPI: true
+
+
+    setGCPercent: 30
+
+    enableAuditForAuthorize: false
+
+    enableIAMEntitiesSchemaMigration: true
+
+    # config applicable only for v4 APIs
+    v4ApiConfig:
+      schemaYamlsDir: "/v4/schema_yamls" # dir containing yaml for schema validation
+      errorMsgDir: "/v4/error_messages" # error yamls base dir
+      circuitBreaker:
+        enableV4CircuitBreaker: true
+        configFile: /v4/circuit_breaker/circuit_breaker_config.yaml
+      maxPayloadSize:
+        request: 64000 # 64KB
+        getResp: 200000 # 200KB
+        listResp: 2000000 # 2MB
+      truncateResponse: 
+        enableTruncateResponse: true
+        maxSize: 25 
+        maxDepth: 20
+      enableRateLimit: false
+      enableGzipCompression: true
+
+    # Is service deployed in Cloud
+    cloudDeployment: false
+    # Set of product to choose from NC, PC, XI
+    product: PC
+
+    # AuthN service details for Cloud-IAM
+    authnService:
+      scheme: https
+      hostName: iam-user-authn
+      port: 5556
+
+    # Tracer config
+    tracerConfig:
+      type: pc
+      serviceName: authz_service

@@ -1,0 +1,18 @@
+{{- if not .Values.naiDatabase.external }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nai-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-db
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.defaultStorageClassName }}
+  storageClassName: {{ .Values.defaultStorageClassName }}
+  {{- end }}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    {{- toYaml .Values.naiDatabase.storageSpec.resources | nindent 4 }}
+{{- end }}

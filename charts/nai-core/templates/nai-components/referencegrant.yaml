@@ -1,0 +1,18 @@
+{{- if .Values.naiAIGateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: nai-service-grant
+  namespace: {{ .Release.Namespace }}
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: nai-admin
+  - group: gateway.envoyproxy.io
+    kind: SecurityPolicy
+    namespace: nai-admin
+  to:
+  - group: ""
+    kind: Service
+{{- end }}

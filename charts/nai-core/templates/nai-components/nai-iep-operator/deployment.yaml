@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nai-iep-model-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iep-operator
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: nai-iep-model-controller
+  template:
+    metadata:
+      labels:
+        control-plane: nai-iep-model-controller
+        app.kubernetes.io/component: nai-iep-operator
+        {{- include "nai-core.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: nai-iep-controller-sa
+      terminationGracePeriodSeconds: 10
+      containers:
+        - command:
+          - manager
+          image: {{ .Values.naiIepOperator.iepOperatorImage.image }}:{{ .Values.naiIepOperator.iepOperatorImage.tag }}
+          name: nai-iep-model-controller
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: NAI_IEP_OPERATOR_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          resources:
+            {{- toYaml .Values.naiIepOperator.iepOperatorResources | nindent 12 }}

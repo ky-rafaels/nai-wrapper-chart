@@ -1,0 +1,15 @@
+{{- if .Values.naiLabs.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nai-labs-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-labs
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  FLASK_ENV: "production"
+  PYTHONUNBUFFERED: "1"
+  RAG_PROD: "true"
+  PYTHONPATH: "/app/app"
+{{- end }}

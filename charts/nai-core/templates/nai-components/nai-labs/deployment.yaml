@@ -1,0 +1,48 @@
+{{- if .Values.naiLabs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nai-labs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-labs
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nai-labs
+  template:
+    metadata:
+      labels:
+        app: nai-labs
+        app.kubernetes.io/component: nai-labs
+        {{- include "nai-core.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: nai-labs-sa
+      containers:
+        - name: nai-labs
+          image: {{ .Values.naiLabs.labsImage.image }}:{{ .Values.naiLabs.labsImage.tag }}
+          imagePullPolicy: {{ .Values.naiLabs.labsImage.pullPolicy }}
+          resources:
+            {{- toYaml .Values.naiLabs.resources | nindent 12 }}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nai-labs-config
+          volumeMounts:
+            - name: rag-data-volume
+              mountPath: /data/RAG_data
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: rag-data-volume
+          persistentVolumeClaim:
+            claimName: nai-labs-data
+{{- end }}

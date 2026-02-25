@@ -1,0 +1,21 @@
+apiVersion: v2
+appVersion: 0.1.0
+dependencies:
+- name: nai-clickhouse-crd
+  repository: ""
+  version: 1.0.0
+- name: nai-clickhouse-operator
+  repository: ""
+  version: 1.0.1
+- condition: naiAIGateway.enabled
+  name: ai-gateway-crds-helm
+  repository: ""
+  version: 0.0.0-791036aaf751787ed2719050d5086b2ba8642f1a
+- condition: naiAIGateway.enabled
+  name: ai-gateway-helm
+  repository: ""
+  version: 0.0.0-791036aaf751787ed2719050d5086b2ba8642f1a
+description: A Helm chart for CRDs and Operators required by NAI Core
+name: nai-operators
+type: application
+version: 2.5.0

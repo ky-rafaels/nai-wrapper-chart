@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ch-admin
+  namespace: {{ template "clickhouse-server.namespace" . }}
+  annotations:
+    {{- include "clickhouse-server.annotations" . | nindent 4}}
+  labels:
+    {{- include "clickhouse-server.labels" . | nindent 4 }}
+type: Opaque
+data:
+  CH_USER: {{ .Values.clickhouse.users.admin.username | default "admin" | b64enc }}
+  CH_PASS: {{ .Values.clickhouse.users.admin.password | default "admin" | b64enc }}
+  DEFAULT_PASS: {{ .Values.clickhouse.users.default.password | default "default" | b64enc }}

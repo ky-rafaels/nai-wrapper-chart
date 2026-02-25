@@ -1,0 +1,23 @@
+{{ $ch_keeper_name := include "clickhouse-keeper.name" . }}
+{{ $ch_keeper_namespace := include "clickhouse-keeper.namespace" . }}
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $ch_keeper_name }}-servicemonitor
+  labels:
+    {{- include "clickhouse-keeper.labels" . | nindent 4 }}
+  annotations:
+    {{- include "clickhouse-keeper.annotations" . | nindent 4}}
+  namespace: {{ $ch_keeper_namespace }}
+spec:
+  endpoints:
+  - interval: 60s
+    port: keeper-metrics
+  namespaceSelector:
+    matchNames:
+    - {{ $ch_keeper_namespace }}
+  selector:
+    matchLabels:
+      {{- include "clickhouse-keeper.selectorLabels" . | nindent 6 }}
+{{- end }}

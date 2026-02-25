@@ -1,0 +1,52 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-proxy-downstream-tls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: iam-proxy-downstream-tls
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  dnsNames:
+  - iam-proxy
+  - iam-proxy.{{ .Release.Namespace }}.svc.cluster.local
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-proxy-upstream-tls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: iam-proxy-upstream-tls-cert
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  commonName: iam-proxy
+  dnsNames:
+  - iam-proxy
+  - iam-proxy.{{ .Release.Namespace }}.svc.cluster.local
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-proxy-mutual-tls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: iam-proxy-mutual-tls-cert
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  commonName: iam-proxy
+  dnsNames:
+  - iam-proxy
+  - iam-proxy.{{ .Release.Namespace }}.svc.cluster.local

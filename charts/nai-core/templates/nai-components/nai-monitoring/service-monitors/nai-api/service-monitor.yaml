@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nai-iep-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - interval: 30s
+    targetPort: 8080
+    path: /metrics/all
+    metricRelabelings:
+    - action: keep
+      sourceLabels:
+      - __name__
+      regex: 'gen_ai.server.request.duration_seconds.*|service_health|gen_ai.client.token.usage_token.*'
+  selector:
+    matchLabels:
+      nai-monitoring: nai-prometheus # TODO make this configurable if nai service labels are configurable

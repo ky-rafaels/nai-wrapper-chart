@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-ui-health
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-ui
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  ping_healthz.sh: |-
+    response=$(
+      curl --connect-timeout 10 --max-time 10 --http1.1 -k -s -o /dev/null -w %{http_code} --key $1 --cert $2 --cacert $3 https://localhost:5557/api/iam/iamui/health
+    )
+    if [ "$response" -ne "200" ]; then
+      echo "$response"
+      exit 1
+    fi

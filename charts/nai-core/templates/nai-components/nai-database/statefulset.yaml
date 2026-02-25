@@ -1,0 +1,46 @@
+{{- if not .Values.naiDatabase.external }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nai-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nai-db
+    app.kubernetes.io/component: nai-db
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: nai-db
+  template:
+    metadata:
+      labels:
+        app: nai-db
+        app.kubernetes.io/component: nai-db
+        {{- include "nai-core.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: nai-db
+          image: {{ .Values.naiDatabase.naiDbImage.image }}
+          resources:
+            {{- toYaml .Values.naiDatabase.resources | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: nai-db-creds
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.naiDatabase.postgresql.postgresPort | default 5432 }}
+              protocol: TCP
+          volumeMounts:
+            - name: nai-db-volume
+              mountPath: /var/lib/postgresql/data
+      serviceAccountName: nai-db-sa
+      volumes:
+        - name: nai-db-volume
+          persistentVolumeClaim:
+            claimName: nai-db
+{{- end }}

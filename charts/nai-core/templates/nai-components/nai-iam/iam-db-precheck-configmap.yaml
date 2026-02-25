@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nai-db-precheck
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  precheck.sh: |-
+    # Wait for PostgreSQL server to be ready
+    until pg_isready -h {{ .Values.naiDatabase.postgresql.postgresHost }} -p {{ .Values.naiDatabase.postgresql.postgresPort }} -t 20; do
+      echo "waiting for DB master to get ready"
+    done

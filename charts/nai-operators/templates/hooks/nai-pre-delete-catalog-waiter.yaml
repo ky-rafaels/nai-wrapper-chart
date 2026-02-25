@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-operators-pre-delete-catalog-waiter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-operators.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nai-operators-pre-delete-catalog-waiter
+  annotations:
+    helm.sh/hook: pre-delete
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1 # retry once if the job fails
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: nai-operators-helm-hooks-sa
+      containers:
+      - name: operators-pre-delete-catalog-waiter
+        image: {{ .Values.naiJobs.naiJobsImage.image }}:{{ .Values.naiJobs.naiJobsImage.tag }}
+        command: ["python", "-m", "handlers", "helmrelease-delete-waiter"]
+        envFrom:
+        - configMapRef:
+            name: nai-operators-pre-delete-hook-cm
+            optional: true
+        resources:
+          {{- toYaml .Values.naiJobs.resources | nindent 12 }}

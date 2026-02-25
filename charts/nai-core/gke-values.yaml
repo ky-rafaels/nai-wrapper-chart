@@ -1,0 +1,12 @@
+# Storage class name to be used by nai-db
+defaultStorageClassName: standard-rwo
+
+nai-clickhouse-server:
+  clickhouse:
+    storage:
+      storageClass: standard-rwo # Storage class to be used by nai-clickhouse-server
+
+nai-clickhouse-keeper:
+  clickhouseKeeper:
+    storage:
+      storageClass: standard-rwo # Storage class to be used by nai-clickhouse-keeper

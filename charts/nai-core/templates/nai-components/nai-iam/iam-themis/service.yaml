@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-themis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-themis
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: iam-themis
+  ports:
+  - name: http
+    port: 5558
+    protocol: TCP
+    targetPort: 5558
+  # TODO: check if this is needed
+  - name: prometheus
+    port: 5560
+    protocol: TCP
+    targetPort: 5560

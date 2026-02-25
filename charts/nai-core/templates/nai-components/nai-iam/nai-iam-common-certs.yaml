@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-sa-ica
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: iam-sa-ica
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  isCA: true
+  commonName: iam-sa-ica
+  dnsNames:
+  - iam-user-authn
+  - iam-user-authn.{{ .Release.Namespace }}.svc.cluster.local
+  - iam-proxy-control-plane
+  - iam-proxy-control-plane.{{ .Release.Namespace }}.svc.cluster.local

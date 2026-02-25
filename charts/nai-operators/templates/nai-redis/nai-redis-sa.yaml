@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nai-redis-sa
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-redis
+    {{- include "nai-operators.labels" . | nindent 4 }}
+{{- if .Values.imagePullSecret.name }}
+imagePullSecrets:
+  - name: {{ .Values.imagePullSecret.name }}
+{{- end }}

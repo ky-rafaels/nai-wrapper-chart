@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nai-iep-operator-configmap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iep-operator
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  MODEL_PROCESSOR_IMAGE: "{{ .Values.naiIepOperator.modelProcessorImage.image }}:{{ .Values.naiIepOperator.modelProcessorImage.tag }}"
+  MODEL_PROCESSOR_SA: "nai-model-processor-sa"
+  {{- if .Values.naiIepOperator.modelProcessorResources.requests.cpu }}
+  MODEL_PROCESSOR_REQUEST_CPU: "{{ .Values.naiIepOperator.modelProcessorResources.requests.cpu }}"
+  {{- end }}
+  {{- if .Values.naiIepOperator.modelProcessorResources.requests.memory }}
+  MODEL_PROCESSOR_REQUEST_MEMORY: "{{ .Values.naiIepOperator.modelProcessorResources.requests.memory }}"
+  {{- end }}
+  {{- if .Values.naiIepOperator.modelProcessorResources.limits.cpu }}
+  MODEL_PROCESSOR_LIMIT_CPU: "{{ .Values.naiIepOperator.modelProcessorResources.limits.cpu }}"
+  {{- end }}
+  {{- if .Values.naiIepOperator.modelProcessorResources.limits.memory }}
+  MODEL_PROCESSOR_LIMIT_MEMORY: "{{ .Values.naiIepOperator.modelProcessorResources.limits.memory }}"
+  {{- end }}
+  {{- if or (eq .Values.naiIepOperator.retainModelProcessorJob true) (eq .Values.naiIepOperator.retainModelProcessorJob false) }}
+  RETAIN_MODEL_PROCESSOR_JOB: "{{ .Values.naiIepOperator.retainModelProcessorJob }}"
+  {{- end }}
+  {{- if or (eq .Values.naiIepOperator.runModelProcessorAsNonRoot true) (eq .Values.naiIepOperator.runModelProcessorAsNonRoot false) }}
+  RUN_MODEL_PROCESSOR_AS_NON_ROOT: "{{ .Values.naiIepOperator.runModelProcessorAsNonRoot }}"
+  {{- end }}
+  {{- if or (ge (.Values.naiIepOperator.modelProcessorJobRetentionSeconds | int) 0) }}
+  MODEL_PROCESSOR_JOB_RETENTION_SECONDS: "{{ .Values.naiIepOperator.modelProcessorJobRetentionSeconds }}"
+  {{- end }}

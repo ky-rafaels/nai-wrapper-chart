@@ -1,0 +1,40 @@
+{{- if .Values.naiAIGateway.enabled }}
+
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: nai-extauth
+  namespace: {{.Release.Namespace}} 
+  labels:
+    app.kubernetes.io/component: nai-extauth
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: nai-dataplane-httproute
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: nai-v4-httproute
+
+  extAuth:
+    http:
+      backendRefs:
+        - kind: Service
+          name: nai-api
+          namespace: {{.Release.Namespace}}
+          port: 7001
+      # Default is set to send API key for ratelimiting
+      headersToBackend:
+        - X-Nutanix-Api-Key-Name
+        - X-Nutanix-Api-Key
+        - X-Nutanix-User-Id
+        - X-Nutanix-User-Name
+        - X-Nutanix-Endpoint-Engine
+        - X-Nutanix-Role
+        - X-Nutanix-Endpoint-Id
+        - X-Nutanix-Endpoint-Type
+    bodyToExtAuth:
+      maxRequestBytes: {{ .Values.naiAIGateway.naiExtAuthSecurityPolicy.bodySizeLimit }}
+
+{{- end }}

@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-themis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-themis
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-themis
+  template:
+    metadata:
+      labels:
+        app: iam-themis
+    spec:
+      serviceAccountName: nai-iam-sa
+      initContainers:
+      - name: iam-themis-precheck
+        image: {{ .Values.naiIam.iamThemis.image }}:{{ .Values.naiIam.iamThemis.tag }}
+        command:
+          - sh
+          - -c
+          - /health/precheck.sh
+        resources:
+          {{- toYaml .Values.naiIam.iamThemisResources | nindent 10 }}
+        volumeMounts:
+        - name: health
+          mountPath: /health
+      containers:
+      - name: iam-themis
+        image: {{ .Values.naiIam.iamThemis.image }}:{{ .Values.naiIam.iamThemis.tag }}
+        env:
+          - name: IAM_THEMIS_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: IAM_THEMIS_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: PG_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: nai-db-creds
+                key: POSTGRES_USER
+          - name: PG_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: nai-db-creds
+                key: POSTGRES_PASSWORD
+        command: ["/usr/local/bin/themis", "--configPath=/config/config.yaml"]
+        resources:
+          {{- toYaml .Values.naiIam.iamThemisResources | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 5558
+        - name: prometheus
+          containerPort: 5560
+        volumeMounts:
+        - name: themis-config-volume
+          mountPath: /config
+          readOnly: true
+        - name: version-volume
+          mountPath: /etc/iam_version
+        - name: cb-config-volume
+          mountPath: /v4/circuit_breaker/
+        - name: health
+          mountPath: /health
+        - name: iam-themis-tls-vol
+          mountPath: /etc/ssl/tls_secrets
+          readOnly: true
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+        - name: nai-db-certs-volume
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        {{- end }}
+        livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 20
+          httpGet:
+            scheme: HTTP
+            port: 5559
+            path: /api/iam/authz/v1/versions
+        readinessProbe:
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 20
+          httpGet:
+            scheme: HTTP
+            port: 5559
+            path: /api/iam/authz/v1/versions
+      volumes:
+      - name: themis-config-volume
+        configMap:
+        # Provide the name of the ConfigMap containing the files you want
+        # to add to the container
+          name: iam-themis-config
+          items:
+          - key: iam_themis_config
+            path: config.yaml
+      - name: version-volume
+        configMap:
+          name: iam-version
+          items:
+          - key: iam_version
+            path: iam_version.yaml
+      - name: cb-config-volume
+        configMap:
+          name: circuit-breaker-cm
+      - name: health
+        configMap:
+          name: nai-db-precheck
+          defaultMode: 0755
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+      - name: nai-db-certs-volume
+        secret:
+          secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      {{- end }}
+      - name: iam-themis-tls-vol
+        secret:
+          secretName: iam-themis-tls-cert
+          defaultMode: 384 # this will give 0600 permission octal to decimal

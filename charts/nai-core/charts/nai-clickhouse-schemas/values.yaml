@@ -1,0 +1,45 @@
+# Namespace for ClickHouse Schemas resources
+namespace: ""
+# Image details for ClickHouse Schemas
+image:
+  # URL of the Docker registry
+  registry: docker.io
+  # Repository name for the Docker image
+  repository: nutanix/nai-clickhouse-schemas
+  # Tag for the Docker image
+  tag: 1.0.10
+  # Image pull policy (e.g., Always, IfNotPresent)
+  imagePullPolicy: "IfNotPresent"
+
+# List of image pull secrets to use for the ClickHouse schema pod
+imagePullSecrets: []
+# - "regcred"
+
+# Cluster name for ClickHouse Server
+clusterName: chcluster1
+
+# Suspend migration job (Disable or enable the job)
+suspendMigrationJob: false
+
+# Backoff limit for the migration job
+backoffLimit: 5
+
+# Time to wait between connection attempts to ClickHouse cluster (in seconds)
+waitInterval: 15
+
+# PriorityClass for ClickHouse schemas pod(s)
+priorityClassName: ""
+
+# Set node selector for ClickHouse schemas pod(s)
+nodeSelector: {}
+  # "kubernetes.io/role": "worker"
+
+# Tolerations for ClickHouse schemas pod(s)
+tolerations: []
+# - key: "node.kubernetes.io/role"
+#   operator: "Equal"
+#   value: "worker"
+#   effect: "NoSchedule"
+
+# Enable/disable schema maintenance deployment (This deployment is used to debug any issues w.r.t. schema migration image)
+enableSchemaMaintenance: false

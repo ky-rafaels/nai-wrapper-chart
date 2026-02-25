@@ -1,0 +1,207 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: models.iep.nai.nutanix.com
+spec:
+  group: iep.nai.nutanix.com
+  names:
+    kind: Model
+    listKind: ModelList
+    plural: models
+    singular: model
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Size of the Model in GB
+      jsonPath: .spec.modelSize
+      name: Size
+      type: string
+    - jsonPath: .status.conditions[-1:].type
+      name: Status
+      type: string
+    - jsonPath: .status.url
+      name: URL
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Model is the Schema for the models API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ModelSpec defines the desired state of Model
+            properties:
+              modelSize:
+                description: 'The ModelSize field provides information about size
+                  of the model in GB (ex: "10G").'
+                type: string
+              outputFormat:
+                description: OutputFormat field defined the output format of model
+                  process container (hf)
+                enum:
+                - hf
+                - nim
+                type: string
+              provider:
+                description: The Provider field provides information about the location
+                  of the model.
+                properties:
+                  hf:
+                    description: Model location details on HuggingFace repo
+                    properties:
+                      repoId:
+                        description: HuggingFace repo ID
+                        type: string
+                      repoVersion:
+                        description: HuggingFace repo version
+                        type: string
+                    required:
+                    - repoId
+                    type: object
+                  nfs:
+                    description: Model location details on NFS Server
+                    properties:
+                      modelPath:
+                        description: Path to directory that contains the model files
+                        type: string
+                      serverIp:
+                        description: NFS Server IP Address
+                        type: string
+                      sharePath:
+                        description: NFS Share Path
+                        type: string
+                    required:
+                    - modelPath
+                    - serverIp
+                    - sharePath
+                    type: object
+                  nim:
+                    description: Model location details on NVIDIA NIM repo
+                    properties:
+                      mode:
+                        description: NVIDIA NIM mode
+                        enum:
+                        - single
+                        - all
+                        - best
+                        - noop
+                        type: string
+                      modelImage:
+                        description: NVIDIA NIM model image
+                        type: string
+                      profile:
+                        description: NVIDIA NIM profile
+                        type: string
+                    required:
+                    - mode
+                    - modelImage
+                    type: object
+                  s3:
+                    description: Model location details on S3 Bucket
+                    properties:
+                      bucket:
+                        description: Bucket is the name of the S3 bucket which contains
+                          the model files
+                        type: string
+                      endpoint:
+                        description: The endpoint of the S3 bucket in the format http://x.x.x.x/
+                        type: string
+                      modelPath:
+                        description: ModelPath is the path to directory in bucket
+                          that contains the model files
+                        type: string
+                    required:
+                    - bucket
+                    - endpoint
+                    - modelPath
+                    type: object
+                  secretName:
+                    description: |-
+                      Secret Name which contains confidential information like hf_token, accessKey, secretKey etc.
+                      This will be used by model processor container to access model source location.
+                    type: string
+                type: object
+              storage:
+                description: The Storage field provides information about where to
+                  store model files.
+                properties:
+                  sc:
+                    description: Details regarding StorageClass storage type
+                    type: string
+                type: object
+            required:
+            - modelSize
+            - outputFormat
+            - provider
+            - storage
+            type: object
+          status:
+            description: ModelStatus defines the observed state of Model
+            properties:
+              conditions:
+                description: List of observed runtime conditions for this model resource.
+                items:
+                  description: ModelCondition describes the state of the Model resource
+                    at a certain point.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    lastUpdateTime:
+                      description: The last time this condition was updated.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of Model condition.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              url:
+                description: Model location
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-api-post-upgrade-{{ randAlphaNum 5 | lower }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: nai-post-upgrade
+          image: {{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}
+          resources:
+            {{- toYaml .Values.naiApi.naiMigrateJobResources | nindent 12 }}
+          command: ["./nai-iep", "helm-hooks", "--hook-type", "post-upgrade", "--c", "/etc/config/nai/config.json", "--m", "/etc/config/nai/model_config.json"]
+          envFrom:
+            - secretRef:
+                name: nai-db-creds
+          volumeMounts:
+            - name: nai-api-config-volume
+              mountPath: /etc/config/nai
+          {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+            - name: nai-db-certs-volume
+              mountPath: /etc/ssl/certs
+              readOnly: true
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+      serviceAccountName: nai-api-sa
+      volumes:
+        - name: nai-api-config-volume
+          configMap:
+            name: nai-api-config
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+        - name: nai-db-certs-volume
+          secret:
+            secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+            defaultMode: 420
+      {{- end }}
+      restartPolicy: OnFailure

@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Release.Namespace }}
+  # TODO: remove these labels
+  labels:
+    app: iam-proxy-control-plane
+    app.kubernetes.io/component: iam-proxy-control-plane
+    {{- include "nai-core.labels" . | nindent 4 }}
+  name: iam-proxy-control-plane
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-proxy-control-plane
+  template:
+    metadata:
+      labels:
+        app: iam-proxy-control-plane
+    spec:
+      serviceAccountName: nai-iam-sa
+      initContainers:
+      - name: iam-proxy-control-plane-precheck
+        image: {{ .Values.naiIam.iamProxyControlPlane.image }}:{{ .Values.naiIam.iamProxyControlPlane.tag }}
+        command:
+          - sh
+          - -c
+          - /health/precheck.sh
+        resources:
+          {{- toYaml .Values.naiIam.iamProxyControlPlaneResources | nindent 10 }}
+        volumeMounts:
+        - name: health-volume
+          mountPath: /health
+      containers:
+      - name: iam-proxy-control-plane
+        image: {{ .Values.naiIam.iamProxyControlPlane.image }}:{{ .Values.naiIam.iamProxyControlPlane.tag }}
+        command: ["/usr/local/bin/control-plane", "serve", "/config/proxy_config.yaml"]
+        resources:
+          {{- toYaml .Values.naiIam.iamProxyControlPlaneResources | nindent 10 }}
+        ports:
+        - name: grpc
+          containerPort: 5678
+        - name: ocsp
+          containerPort: 8447
+        livenessProbe:
+          tcpSocket:
+            port: 5678
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: 5678
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        env:
+        - name: ENVOY_DEPLOYMENT_TYPE
+          value: "gcp"
+        - name: BYPASS_THEMIS_MTLS
+          valueFrom:
+            configMapKeyRef:
+              name: iam-proxy-controlplane-config
+              key: bypass-themis-mtls
+        - name: PG_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: nai-db-creds
+              key: POSTGRES_USER
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nai-db-creds
+              key: POSTGRES_PASSWORD
+        # - name: DOMAIN
+        #   valueFrom:
+        #     configMapKeyRef:
+        #       name: iam-proxy-config
+        #       key: domain
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+        - name: nai-db-certs-volume
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        {{- end }}
+        - name: iam-proxy-control-plane-tls-vol
+          mountPath: /etc/upstream_tls_secrets
+          readOnly: true
+        - name: sa-certs-vol
+          mountPath: /etc/sa_certs
+      volumes:
+      - name: config-volume
+        configMap:
+        # Provide the name of the ConfigMap containing the files you want
+        # to add to the container
+          name: iam-proxy-controlplane-config
+          items:
+          - key: proxy_config
+            path: proxy_config.yaml
+      - name: health-volume
+        configMap:
+          name: nai-db-precheck
+          defaultMode: 0755
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+      - name: nai-db-certs-volume
+        secret:
+          secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      {{- end }}
+      - name: iam-proxy-control-plane-tls-vol
+        secret:
+          secretName: iam-proxy-control-plane-tls-cert
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      - name: sa-certs-vol
+        secret:
+          secretName: iam-sa-ica

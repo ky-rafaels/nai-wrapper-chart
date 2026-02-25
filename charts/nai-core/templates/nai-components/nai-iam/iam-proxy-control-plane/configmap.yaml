@@ -1,0 +1,334 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-proxy-controlplane-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: iam-proxy-control-plane
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  bypass-themis-mtls: "false"
+  proxy_config: |
+    storage:
+      type: postgres
+      config:
+        database: nai_iam
+        searchPath: iam_proxy_control_plane
+        hostRo: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        hostWrite: {{ .Values.naiDatabase.postgresql.postgresHost }}:{{ .Values.naiDatabase.postgresql.postgresPort }}
+        port: {{ .Values.naiDatabase.postgresql.postgresPort }}
+        tls_mode: disable
+
+        ssl:
+          mode: {{ .Values.naiDatabase.postgresql.postgresSSLMode }}
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          caFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          keyFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+          {{- end }}
+          {{- if .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          certFile: /etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+          {{- end }}
+        {{- end }}
+        connectionRo:
+          maxOpen: 30
+          maxIdle: 10
+          maxLifetimeInMinutes: 5
+        connectionWrite:
+          maxOpen: 30
+          maxIdle: 10
+          maxLifetimeInMinutes: 5
+    # Configuration for telemetry
+    telemetry:
+      http: 0.0.0.0:5558
+
+    # Options for controlling the logger.
+    logger:
+      level: "debug"
+      format: "text" # can also be "json"
+
+    # Port configurations
+    controlplane_port: 5678
+    revocation_api_port: 8447
+
+    zkPort: 9876
+
+    # Bootstrap config for iam-proxy
+    bootstrap_config:
+      upstream_certs:
+        certificate: /etc/upstream_tls_secrets/tls.crt
+        key: /etc/upstream_tls_secrets/tls.key
+        ca: /etc/upstream_tls_secrets/ca.crt
+
+      downstream_certs:
+        mtls:
+          certificate: /etc/mtls_secrets/tls.crt
+          key: /etc/mtls_secrets/tls.key
+          ca: /etc/mtls_secrets/ca.crt
+        sa-mtls:
+          certificate: /etc/mtls_secrets/tls.crt
+          key: /etc/mtls_secrets/tls.key
+          ca: /etc/sa_certs/ca.crt
+          ica: /etc/sa_certs/tls.crt
+        browser:
+          certificate: /etc/downstream_tls_secrets/tls.crt
+          key: /etc/downstream_tls_secrets/tls.key
+
+      clusters:
+        frontend_service:
+          name: "frontend_service"
+          service_address: "iam-ui"
+          port: 5557
+          timeout: "2s"
+          enable_http2: false
+          enable_upstream_tls: true
+
+        authn_service:
+          name: "authn_service"
+          service_address: "iam-user-authn"
+          port: 5556
+          timeout: "2s"
+          alpn_protocols: "h2"
+          enable_http2: true
+          enable_upstream_tls: true
+
+        themis_service:
+          name: "themis_service"
+          service_address: "iam-themis"
+          port: 5558
+          timeout: "2s"
+          enable_http2: false
+          enable_upstream_tls: true
+
+        ocsp_cluster:
+          name: "ocsp_cluster"
+          service_address: "iam-proxy-control-plane"
+          port: 8447
+          timeout: "2s"
+          enable_http2: false
+          enable_upstream_tls: false
+
+        ext_authz_service:
+          name: "ext_authz_service"
+          service_address: "iam-proxy-control-plane"
+          port: 8446
+          timeout: "5s"
+          enable_http2: true
+          enable_upstream_tls: false
+
+      routes:
+        frontend_route:
+          name: "frontend_route"
+          cluster: "frontend_service"
+          prefix: "/"
+          timeout: "120s"
+          disable_ext_authz: true
+
+        authn_route:
+          name: "authn_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/authn"
+          timeout: "120s"
+
+        authn_v4_route:
+          name: "authn_v4_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/v4.[0-9](.[a-z][0-9])?/authn"
+          is_regex: true
+          rewrite_pattern: "v4.[0-9](.[a-z][0-9])?"
+          rewrite_substitution: "v4"
+          timeout: "120s"
+
+        cac_route:
+          name: "cac_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/authn/v1/oidc/auth/cac"
+          timeout: "120s"
+
+        cac_v4_route:
+          name: "cac_v4_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/v4.[0-9](.[a-z][0-9])?/authn/login-requests/\\$actions/validate-certificate"
+          is_regex: true
+          rewrite_pattern: "v4.[0-9](.[a-z][0-9])?"
+          rewrite_substitution: "v4"
+          timeout: "120s"
+
+        token_route:
+          name: "token_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/authn/v1/oidc/token"
+          timeout: "120s"
+
+        themis_route:
+          name: "themis_route"
+          cluster: "themis_service"
+          prefix: "/api/iam/authz"
+          timeout: "120s"
+
+        themis_v4_route:
+          name: "themis_v4_route"
+          cluster: "themis_service"
+          prefix: "/api/iam/v4.[0-9](.[a-z][0-9])?/authz"
+          is_regex: true
+          rewrite_pattern: "v4.[0-9](.[a-z][0-9])?"
+          rewrite_substitution: "v4"
+          timeout: "120s"
+
+        # Below AuthN routes are created so that we can allow unauthenticated access
+        # to work in case control-plane is down
+        authn_non_auth_route:
+          name: "authn_non_auth_route"
+          cluster: "authn_service"
+          prefix: "/api/iam/authn/(.well-known/openid-configuration|callback|v1/(sessions|oidc/(auth|connectors|token|logout)))"
+          is_regex: true
+          timeout: "120s"
+          disable_ext_authz: true
+
+      rate_limit_actions:
+        - http_method: "GET"
+          regex_path: '/api/iam/authn/v1/oidc/auth\?.*'
+          path_name: "v1_handle_login_init_api"
+
+      listeners:
+        tls_listener:
+          name: "tls_listener"
+          port: 8443
+          route_config_name: "local_route"
+          virtual_host_name: "services"
+          http_connection_manager_timeout: "120s"
+          alpn_protocols: "h2,http/1.1"
+          downstream_cert_type: "browser"
+          # Themis is disabled by default, add "themis_route" below to enable
+          # Note that the order of the routes matter, frontend_route should always be at the end
+          routes:
+            - "authn_non_auth_route"
+            - "authn_route"
+            - "authn_v4_route"
+            - "themis_v4_route"
+            - "frontend_route"
+          enabled: true
+          enable_ext_authz_filter: true
+          ext_authz_config:
+            cluster: "ext_authz_service"
+            uri: "https://iam-user-authn:5556/api/iam/authn/v1/oidc/token"
+            key_uri: "https://iam-user-authn:5556/api/iam/authn/v1/oidc/keys"
+            # Flag for timeout in seconds for fetching authn keys
+            keys_timeout: 2
+            certificate_info:
+              certificate: /etc/upstream_tls_secrets/tls.crt
+              key: /etc/upstream_tls_secrets/tls.key
+              ca: /etc/upstream_tls_secrets/ca.crt
+            timeout: "30s"
+            error_status_code: 503
+            prefix_path: "/api/iam/"
+            unauthenticated_uris: # endpoints which can be accessed without authentication
+              - "GET:/.well-known/openid-configuration"           # Required for v4 Options URL
+              - "GET:/healthz"                                    # Health URL
+              - "GET:/oidc/keys"                                  # Required for both v1 and v4 keys URL
+              - "POST:/oidc/token"                                # Token URL
+              - "GET:/oidc/clients"                               # Clients URL
+              - "GET:/api/iam/authn/versions"                     # Versions URL
+              - "PUT:/api/iam/authn/v1/users/password"            # Change Passowrd URL
+              - "GET:/api/iam/authn/v1/system_configuration"      # System Configuration URL, Only GET
+              - "GET:/saml-sp-metadata"                           # V4 Saml SP Metadata
+              - "POST:/users/$actions/change-password"            # V4 Change password
+              - "POST:/api-keys/$actions/validate"                # V4 Validate API key
+              - "POST:/login-request"                             # V4 Login Request
+              - "GET: /login-providers"                           # V4 Login Providers
+              - "GET,POST,PUT,DELETE:/login-requests"             # V4 Login Requests
+              - "GET:/welcome-banner"                             # V4 Welcome Banner
+              - "GET:/initiate-login"                             # Initiate Login URL
+            mtls_only_uris: # endpts which will only be accessible over mTLS, format - {comma separated httpMethods<colon>regex based path}
+              - "POST:/authz/\\$actions/authorize"
+              - "POST,PUT:/authz/client"
+              - "POST:/authz/tenant"
+              - "GET:/authn/buckets-access-keys/"
+              - "GET,POST,DELETE:/authn/federation"
+              - "POST,DELETE:/authn/v1/oidc/clients"
+              - "GET,POST,PUT,DELETE:/authn/v1/users"
+              - "GET,POST,PUT,DELETE:/authn/v1/tenants"
+              - "GET,POST:/authn/v1/buckets_access_keys"
+              - "POST:/authn/v1/users_internal"
+              - "POST:/authn/v1/local_users_internal"
+              - "POST:/authn/v1/groups_internal"
+              - "POST:/authn/v1/directory_services_internal"
+              - "POST:/authn/v1/saml_identity_providers_internal"
+              - "POST,PUT:/authn/v1/system_configuration"
+              - "POST:/tenant/configuration"
+              - "GET,POST:/authn/system-config"
+              - "GET,PUT,DELETE:/authn/system-config/"
+              - "POST:/authn/$actions/fetch-objects-auth-details"
+          log_format_string: "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_SENT% %DURATION% \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" %DOWNSTREAM_REMOTE_ADDRESS% \"%UPSTREAM_HOST%\" \n"
+
+        mtls_listener:
+          name: "mtls_listener"
+          port: 8445
+          route_config_name: "local_route"
+          virtual_host_name: "services"
+          http_connection_manager_timeout: "120s"
+          alpn_protocols: "h2,http/1.1"
+          require_client_cert: true
+          downstream_cert_type: "mtls"
+          # Note that the order of the routes matter, frontend_route should always be at the end
+          routes:
+            - "authn_route"
+            - "authn_v4_route"
+            - "themis_route"
+            - "themis_v4_route"
+            - "frontend_route"
+          enabled: true
+          log_format_string: "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_SENT% %DURATION% \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" %DOWNSTREAM_REMOTE_ADDRESS% \"%UPSTREAM_HOST%\" \n"
+
+        cert_auth_listener:
+          name: "cert_auth_listener"
+          port: 9441
+          route_config_name: "local_route"
+          virtual_host_name: "services"
+          http_connection_manager_timeout: "120s"
+          alpn_protocols: "h2,http/1.1"
+          require_client_cert: true
+          downstream_cert_type: "browser"
+          routes:
+            - "cac_route"
+            - "cac_v4_route"
+          enabled: false
+          log_format_string: "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_SENT% %DURATION% \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" %DOWNSTREAM_REMOTE_ADDRESS% \"%UPSTREAM_HOST%\" \n"
+
+        serv_acc_listener:
+          name: "serv_acc_listener"
+          port: 9442
+          route_config_name: "local_route"
+          virtual_host_name: "services"
+          http_connection_manager_timeout: "120s"
+          alpn_protocols: "h2,http/1.1"
+          require_client_cert: true
+          downstream_cert_type: "sa-mtls"
+          routes:
+            - "token_route"
+          enabled: true
+          log_format_string: "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_SENT% %DURATION% \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" %DOWNSTREAM_REMOTE_ADDRESS% \"%UPSTREAM_HOST%\" \n"
+
+        # Listener for v4 calls proxied via Mercury.
+        v4_http_listener:
+          name: "v4_http_listener"
+          port: 8448
+          route_config_name: "local_route"
+          virtual_host_name: "services"
+          http_connection_manager_timeout: "120s"
+          alpn_protocols: "h2,http/1.1"
+          disable_tls: true
+          routes:
+            - "authn_v4_route"
+            - "themis_v4_route"
+          enabled: true
+          enable_ext_authz_filter: true
+          # Ext authz grpc server will be created using tls_listener's
+          # ext authz config. v4_http_listener will just point to that server
+          ext_authz_config:
+            cluster: "ext_authz_service"
+            timeout: "30s"
+            error_status_code: 503
+          log_format_string: "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_SENT% %DURATION% \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" %DOWNSTREAM_REMOTE_ADDRESS% \"%UPSTREAM_HOST%\" \n"

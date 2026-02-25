@@ -1,0 +1,16 @@
+{{- if .Values.naiAIGateway.enabled }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: nai-backend
+  namespace: nai-admin
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+    - fqdn:
+        hostname: nai-api.{{ .Release.Namespace }}.svc.cluster.local
+        port: 7000
+{{- end }}
+

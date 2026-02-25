@@ -1,0 +1,12 @@
+# Storage class name to be used by nai-db
+defaultStorageClassName: gp2
+
+nai-clickhouse-server:
+  clickhouse:
+    storage:
+      storageClass: gp2 # Storage class to be used by nai-clickhouse-server
+
+nai-clickhouse-keeper:
+  clickhouseKeeper:
+    storage:
+      storageClass: gp2 # Storage class to be used by nai-clickhouse-keeper

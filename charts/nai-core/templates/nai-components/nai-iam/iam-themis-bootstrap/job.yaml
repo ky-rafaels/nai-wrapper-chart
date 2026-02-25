@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iam-themis-bootstrap-{{ randAlphaNum 5 | lower }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-themis-bootstrap
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: iam-themis-bootstrap
+    spec:
+      serviceAccountName: iam-themis-bootstrap-sa
+      volumes:
+      - name: themis-config-volume
+        configMap:
+          name: iam-themis-bootstrap-config
+          items:
+          - key: iam_bootstrap_config
+            path: config.yaml
+      - name: version-volume
+        configMap:
+          name: iam-version
+          items:
+          - key: iam_version
+            path: iam_version.yaml
+      - name: app-source-vol
+        hostPath:
+          path: /home/docker/msp_controller/bootstrap/services/IAMv2/
+      
+      - name: iam-bootstrap-tls-cert-volume
+        secret:
+          secretName: iam-bootstrap-tls-cert
+          defaultMode: 292 # this will give 0444 permission octal to decimal
+
+      containers:
+      - name: iam-themis-bootstrap
+        image: {{ .Values.naiIam.iamThemisBootstrap.image }}:{{ .Values.naiIam.iamThemisBootstrap.tag }}
+        env:
+          - name: PGSSLCERT
+            value: "/etc/ssl_secrets/tls.crt"
+          - name: PGSSLKEY
+            value: "/etc/ssl_secrets/tls.key"
+        command:
+          - "/bin/ash"
+          - "-ec"
+          - |
+            mkdir -p /etc/ssl_secrets
+            cp /etc/tls_secrets/* /etc/ssl_secrets/
+            chmod 0600 /etc/ssl_secrets/*
+            /usr/local/bin/bootstrap --configPath=/config/config.yaml
+        resources:
+          {{- toYaml .Values.naiIam.iamThemisBootstrapResources | nindent 10 }}
+        volumeMounts:
+        - name: themis-config-volume
+          mountPath: /config
+        - name: version-volume
+          mountPath: /etc/iam_version
+        - name: app-source-vol
+          mountPath: /iamv2-yaml-files/
+        - name: iam-bootstrap-tls-cert-volume
+          mountPath: /etc/tls_secrets
+          readOnly: true
+      restartPolicy: Never

@@ -1,0 +1,8 @@
+annotations:
+  appType: Service
+apiVersion: v2
+appVersion: 0.24.2
+description: Helm chart for NAI ClickHouse Operator
+name: nai-clickhouse-operator
+type: application
+version: 1.0.1

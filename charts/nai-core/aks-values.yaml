@@ -1,0 +1,17 @@
+## azure specific storage class overrides
+defaultStorageClassName: managed-csi
+naiApi:
+  storageClassName: azurefile-csi
+
+nai-clickhouse-server:
+  clickhouse:
+    storage:
+      storageClass: managed-csi # Storage class to be used by nai-clickhouse-server
+
+nai-clickhouse-keeper:
+  clickhouseKeeper:
+    storage:
+      storageClass: managed-csi # Storage class to be used by nai-clickhouse-keeper
+naiMonitoring:
+  opentelemetry:
+    storageClassName: azurefile-csi

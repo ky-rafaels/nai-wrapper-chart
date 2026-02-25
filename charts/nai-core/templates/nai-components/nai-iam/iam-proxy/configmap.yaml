@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iam-proxy-bootstrap-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  envoy-current.yaml: |
+    dynamic_resources:
+      cds_config:
+        resource_api_version: V3
+        api_config_source:
+          api_type: GRPC
+          transport_api_version: V3
+          grpc_services:
+            envoy_grpc:
+              cluster_name: xds_cluster
+      lds_config:
+        resource_api_version: V3
+        api_config_source:
+          api_type: GRPC
+          transport_api_version: V3
+          grpc_services:
+            envoy_grpc:
+              cluster_name: xds_cluster
+    node:
+      cluster: iam_cluster
+      id: node0
+    static_resources:
+      clusters:
+      - name: xds_cluster
+        # Add tls_context for mtls between control plane and envoy
+        connect_timeout: 10s
+        type: LOGICAL_DNS
+        lb_policy: ROUND_ROBIN
+        http2_protocol_options: {}
+        upstream_connection_options:
+          # configure a TCP keep-alive to detect and reconnect to the admin
+          # server in the event of a TCP socket half open connection
+          tcp_keepalive: {}
+        load_assignment:
+          cluster_name: xds_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: iam-proxy-control-plane
+                    port_value: 8446
+    admin:
+      access_log_path: /tmp/admin_access.log
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8001 }

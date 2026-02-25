@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam-proxy-control-plane
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: iam-proxy-control-plane
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: iam-proxy-control-plane
+  ports:
+  - name: control-plane
+    port: 8446
+    protocol: TCP
+    targetPort: 5678
+  - name: ocsp
+    port: 8447
+    protocol: TCP
+    targetPort: 8447
+  type: ClusterIP

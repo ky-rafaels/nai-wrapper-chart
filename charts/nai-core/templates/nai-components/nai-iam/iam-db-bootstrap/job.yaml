@@ -1,0 +1,118 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iam-database-bootstrap-{{ randAlphaNum 5 | lower }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: iam-database-bootstrap
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      serviceAccountName: nai-iam-sa
+      containers:
+        - name: iam-database-bootstrap
+          image: {{ .Values.naiDatabase.naiDbImage.image }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              # Set common database connection variables
+              DB_HOST="{{ .Values.naiDatabase.postgresql.postgresHost }}"
+              DB_PORT="{{ .Values.naiDatabase.postgresql.postgresPort }}"
+              DB_USER="{{ .Values.naiDatabase.postgresql.postgresUser }}"
+              IAM_DB="nai_iam"
+
+              # Wait for PostgreSQL to be ready
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"; do
+                echo "PostgreSQL is not ready yet. Waiting..."
+                sleep 2
+              done
+
+              echo "PostgreSQL is ready. Starting IAM database bootstrap..."
+
+              # Set SSL parameters for psql commands
+              export PGSSLMODE="{{ .Values.naiDatabase.postgresql.postgresSSLMode }}"
+              {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+              {{- if .Values.naiDatabase.postgresql.postgresSSLRootCertName }}
+              export PGSSLROOTCERT="/etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLRootCertName }}"
+              {{- end }}
+              {{- if .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}
+              export PGSSLKEY="/etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientKeyName }}"
+              {{- end }}
+              {{- if .Values.naiDatabase.postgresql.postgresSSLClientCertName }}
+              export PGSSLCERT="/etc/ssl/certs/{{ .Values.naiDatabase.postgresql.postgresSSLClientCertName }}"
+              {{- end }}
+              echo "Using SSL mode: {{ .Values.naiDatabase.postgresql.postgresSSLMode }}"
+              {{- end }}
+
+              # Define IAM schemas to create
+              IAM_SCHEMAS=(
+                "iam_proxy_control_plane"
+                "iam_themis"
+                "iam_user_authn"
+                # Add more schemas here in the future
+              )
+
+              # Function to execute psql commands
+              run_psql() {
+                PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$@"
+              }
+
+              # Create the IAM database if it doesn't exist
+              echo "Creating IAM database: $IAM_DB"
+              if run_psql -d postgres -c "CREATE DATABASE $IAM_DB;"; then
+                echo "Database $IAM_DB created successfully"
+              else
+                echo "Database $IAM_DB already exists"
+              fi
+
+              # Setup IAM database permissions and schemas (user is managed globally)
+              echo "Configuring IAM database permissions for existing user: $DB_USER"
+              
+              # Create all IAM schemas if they don't exist
+              echo "Creating IAM schemas..."
+              for schema in "${IAM_SCHEMAS[@]}"; do
+                echo "Creating schema $schema..."
+                run_psql -d "$IAM_DB" -c "CREATE SCHEMA IF NOT EXISTS \"$schema\";"
+              done
+
+              echo "IAM database configured successfully for user $DB_USER"
+
+              echo "IAM database bootstrap completed successfully!"
+              echo "Database: $IAM_DB"
+              echo "Schemas: ${IAM_SCHEMAS[*]}"
+              echo "User: $DB_USER"
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nai-db-creds
+                  key: POSTGRES_PASSWORD
+          {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+          volumeMounts:
+            - name: nai-db-certs-volume
+              mountPath: /etc/ssl/certs
+              readOnly: true
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+      volumes:
+        - name: nai-db-certs-volume
+          secret:
+            secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+            defaultMode: 0600
+      {{- end }}
+      restartPolicy: OnFailure

@@ -1,0 +1,36 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nai-jobs-iam-proxy-mtls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: nai-jobs-iam-proxy-mtls-cert
+  # TODO - update issuerRef when IAM chart is ready
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  commonName: nai-jobs
+  dnsNames:
+  - nai-jobs
+---
+# TODO - remove this certificate after 2.5 release
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nai-migrate-iam-proxy-mtls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: nai-migrate-iam-proxy-mtls-cert
+  # TODO - update issuerRef when IAM chart is ready
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  # This common name is used to identify who is taking the action in themis service
+  # Useful for audit logs
+  commonName: System
+  dnsNames:
+  - nai-jobs

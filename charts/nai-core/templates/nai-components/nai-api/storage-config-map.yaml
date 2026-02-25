@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nai-storage-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  STORAGE_CLASS_NAME: {{ .Values.naiApi.storageClassName | quote }}

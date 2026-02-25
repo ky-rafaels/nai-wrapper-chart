@@ -1,0 +1,56 @@
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nai-tgi-endpoints-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    prometheus: {{ template "nai-monitoring.prometheus.name" . }}
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  endpoints:
+  - interval: 30s
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.targetPort }}
+    targetPort: {{ .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.targetPort }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.path }}
+    path: {{ .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.path }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.port }}
+    port: {{ .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.port }}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.scheme }}
+    scheme: {{ .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.endpoint.scheme }}
+{{- end }}
+    metricRelabelings:
+    - sourceLabels: [model_name]
+      regex: (.*)
+      targetLabel: endpointName
+      replacement: $1
+    - sourceLabels: [model_name]
+      regex: (.*)
+      targetLabel: targetEndpointName
+      replacement: $1
+    # Drop original model_name label (after copies above)
+    - action: labeldrop
+      regex: ^model_name$
+    # Keep only desired metrics
+{{- if .Values.naiAIGateway.enabled }}
+    - action: keep
+      sourceLabels: [__name__]
+      regex: 'tgi_batch_current_size|tgi_queue_size'
+{{- else }}
+    - action: keep
+      sourceLabels: [__name__]
+      regex: 'tgi_request_mean_time_per_token_duration.*|tgi_batch_current_size|tgi_queue_size'
+{{- end }}
+
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.namespaceSelector }}
+  namespaceSelector:
+{{ toYaml .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.namespaceSelector | indent 4}}
+{{- end }}
+{{- if .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.serviceSelector }}
+  selector:
+{{ toYaml .Values.naiMonitoring.llmMetricsExporter.tgi.serviceMonitor.serviceSelector | indent 4}}
+{{- end }}
+{{- end }}

@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iam-user-authn
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-user-authn
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-user-authn
+  template:
+    metadata:
+      labels:
+        app: iam-user-authn
+    spec:
+      serviceAccountName: nai-iam-sa
+      initContainers:
+      - name: iam-user-authn-precheck
+        image: {{ .Values.naiIam.iamUserAuthn.image }}:{{ .Values.naiIam.iamUserAuthn.tag }}
+        command:
+          - sh
+          - -c
+          - /health/precheck.sh
+        resources:
+          {{- toYaml .Values.naiIam.iamUserAuthnResources | nindent 10 }}
+        volumeMounts:
+        - name: health-volume
+          mountPath: /health
+      containers:
+      - name: iam-user-authn
+        env:
+          - name: IAM_USER_AUTHN_POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: IAM_USER_AUTHN_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: PG_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: nai-db-creds
+                key: POSTGRES_USER
+          - name: PG_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: nai-db-creds
+                key: POSTGRES_PASSWORD
+        image: {{ .Values.naiIam.iamUserAuthn.image }}:{{ .Values.naiIam.iamUserAuthn.tag }}
+        command: ["/usr/local/bin/iam", "serve", "/config/iam_config.yaml", "/etc/iam_version/iam_version.yaml"]
+        resources:
+          {{- toYaml .Values.naiIam.iamUserAuthnResources | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 5556
+        - name: prometheus
+          containerPort: 5558
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+        - name: version-volume
+          mountPath: /etc/iam_version
+        - name: health-volume
+          mountPath: /health
+        - name: cb-config-volume
+          mountPath: /v4/circuit_breaker/
+        - name: iam-user-authn-tls-vol
+          mountPath: /etc/tls_certs
+          readOnly: true
+        - name: iam-user-authn-saml-tls-vol
+          mountPath: /etc/ssl/saml_secrets
+          readOnly: true
+        - name: sa-certs-volume
+          mountPath: /etc/sa_certs
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+        - name: nai-db-certs-volume
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        {{- end }}
+        livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 20
+          httpGet:
+            scheme: HTTP
+            port: 5559
+            path: /api/iam/authn/versions
+        readinessProbe:
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 20
+          httpGet:
+            scheme: HTTP
+            port: 5559
+            path: /api/iam/authn/versions
+      volumes:
+      - name: config-volume
+        configMap:
+          name: iam-user-authn-config
+          items:
+          - key: iam_config
+            path: iam_config.yaml
+      - name: version-volume
+        configMap:
+          name: iam-version
+          items:
+          - key: iam_version
+            path: iam_version.yaml
+      - name: health-volume
+        configMap:
+          name: nai-db-precheck
+          defaultMode: 0755
+      - name: cb-config-volume
+        configMap:
+          name: circuit-breaker-cm
+      - name: iam-user-authn-tls-vol
+        secret:
+          secretName: iam-user-authn-tls-cert
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      - name: iam-user-authn-saml-tls-vol
+        secret:
+          secretName: saml-key-pair
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") }}
+      - name: nai-db-certs-volume
+        secret:
+          secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+          defaultMode: 384 # this will give 0600 permission octal to decimal
+      {{- end }}
+      - name: sa-certs-volume
+        secret:
+          secretName: iam-sa-ica

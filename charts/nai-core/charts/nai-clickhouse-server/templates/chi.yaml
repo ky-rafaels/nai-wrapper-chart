@@ -1,0 +1,216 @@
+{{ $ch_server_name := include "clickhouse-server.name" . }}
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: {{ $ch_server_name }}
+  annotations:
+    {{- include "clickhouse-server.annotations" . | nindent 4}}
+  labels:
+    {{- include "clickhouse-server.labels" . | nindent 4 }}
+  namespace: {{ template "clickhouse-server.namespace" . }}
+spec:
+  namespaceDomainPattern: '%s'
+  restart: "RollingUpdate"
+  defaults:
+    templates:
+       podTemplate: {{ $ch_server_name }}-pod
+       dataVolumeClaimTemplate: clickhouse-data-volume
+       serviceTemplate: {{ $ch_server_name }}-svc
+    distributedDDL:
+      profile: default
+    storageManagement:
+      reclaimPolicy: {{ .Values.clickhouse.storage.reclaimPolicy }}
+  configuration:
+    users:
+    {{- include "clickhouse-server.users" . | indent 6 }}
+    {{- if .Values.clickhouse.serverConfigurations.profiles }}
+    profiles:
+    {{- toYaml .Values.clickhouse.serverConfigurations.profiles | nindent 6 }}
+    {{- end }}
+    {{- if .Values.clickhouse.serverConfigurations.settings }}
+    settings:
+    {{- toYaml .Values.clickhouse.serverConfigurations.settings | nindent 6 }}
+    {{- end }}
+    {{- if .Values.clickhouse.serverConfigurations.files }}
+    files:
+    {{- toYaml .Values.clickhouse.serverConfigurations.files | nindent 6 }}
+    {{- end }}
+    zookeeper:
+      nodes:
+        - host: {{ .Values.clickhouse.keeperClusterService.name }}
+          port: {{ .Values.clickhouse.keeperClusterService.port }}
+    clusters:
+      - name: {{ .Values.clickhouse.clusterName }}
+        templates:
+          clusterServiceTemplate: cluster-svc-template
+        layout:
+          shardsCount: {{ .Values.clickhouse.shards }}
+          replicasCount: {{ .Values.clickhouse.replicas }}
+        secret:
+          auto: "true"
+        schemaPolicy:
+          shard: "All"
+          replica: "All"
+  templates:
+    podTemplates:
+      - name: {{ $ch_server_name }}-pod
+        metadata:
+          annotations:
+            {{- include "clickhouse-server.annotations" . | nindent 12}}
+          labels:
+            {{- include "clickhouse-server.labels" . | nindent 12 }}
+        spec:
+          {{- if .Values.clickhouse.tolerations }}
+          tolerations:
+          {{- toYaml .Values.clickhouse.tolerations | nindent 12 }}
+          {{- end }}
+          {{- if .Values.clickhouse.nodeSelector }}
+          nodeSelector:
+          {{- toYaml .Values.clickhouse.nodeSelector | nindent 12 }}
+          {{- end }}
+          {{- if .Values.clickhouse.podAntiAffinity }}
+          affinity:
+            podAntiAffinity:
+          {{- if eq .Values.clickhouse.podAntiAffinity.type "hard" }}
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    {{- include "clickhouse-server.selectorLabels" . | nindent 20 }}
+                topologyKey: {{ .Values.clickhouse.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+          {{- else if eq .Values.clickhouse.podAntiAffinity.type "soft" }}
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 1
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      {{- include "clickhouse-server.selectorLabels" . | nindent 20 }}
+                  topologyKey: {{ .Values.clickhouse.podAntiAffinity.topologyKey | default "kubernetes.io/hostname" }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.clickhouse.priorityClassName }}
+          priorityClassName: {{ .Values.clickhouse.priorityClassName }}
+          {{- end }}
+          {{- if .Values.clickhouse.imagePullSecrets }}
+          imagePullSecrets:
+          {{- range .Values.clickhouse.imagePullSecrets }}
+          - name: {{ . }}
+          {{- end }}
+          {{- end }}
+          volumes:
+            - name: custom-functions-volume
+              configMap:
+                name: {{ include "clickhouse-server.name" . }}-custom-functions
+            - name: shared-binary-volume
+              emptyDir: {}
+          initContainers:
+          {{- if .Values.clickhouse.initContainers.addUdf.enabled }}
+            - name: add-udf
+              image: {{ .Values.clickhouse.initContainers.addUdf.image.registry }}/{{ .Values.clickhouse.initContainers.addUdf.image.repository }}:{{ .Values.clickhouse.initContainers.addUdf.image.tag }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "Copying udf script to user scripts directory..."
+                  cp /app/histogramQuantile /var/lib/clickhouse/user_scripts/
+                  
+                  cd /var/lib/clickhouse/user_scripts
+                  ls -la
+                  chmod +x histogramQuantile
+
+                  echo "histogramQuantile udf added successfully"
+              {{- if .Values.clickhouse.initContainers.addUdf.resources }}
+              resources:
+              {{- toYaml .Values.clickhouse.initContainers.addUdf.resources | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: shared-binary-volume
+                  mountPath: /var/lib/clickhouse/user_scripts
+          {{- end }}
+          {{- if .Values.clickhouse.initContainers.waitForKeeper.enabled }}
+            - name: wait-for-keeper
+              image: {{ .Values.clickhouse.initContainers.waitForKeeper.image.registry }}/{{ .Values.clickhouse.initContainers.waitForKeeper.image.repository }}:{{ .Values.clickhouse.initContainers.waitForKeeper.image.tag }}
+              imagePullPolicy: {{ .Values.clickhouse.initContainers.waitForKeeper.image.imagePullPolicy }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Waiting for ClickHouse Keeper service to be ready and healthy..."
+                  
+                  timeout={{ .Values.clickhouse.initContainers.waitForKeeper.timeoutSeconds }}
+                  interval={{ .Values.clickhouse.initContainers.waitForKeeper.intervalSeconds }}
+                  elapsed=0
+                  
+                  keeper_host="{{ .Values.clickhouse.keeperClusterService.name }}"
+                  keeper_port="{{ .Values.clickhouse.keeperClusterService.port }}"
+                  
+                  echo "Checking ClickHouse Keeper at $keeper_host:$keeper_port"
+                  echo "Timeout: ${timeout}s, Check interval: ${interval}s"                  
+                  while [ $elapsed -lt $timeout ]; do
+                    echo "Attempting to connect to ClickHouse Keeper... (${elapsed}s/${timeout}s)"
+                    
+                    # Use netcat for health check (same as your working manual test)
+                    response=$(echo "ruok" | nc -w 3 "$keeper_host" "$keeper_port" 2>/dev/null)
+                    
+                    if [ "$response" = "imok" ]; then
+                      echo "ClickHouse Keeper is healthy and ready! (responded: $response)"
+                      echo "ClickHouse Server can now start safely."
+                      exit 0
+                    elif [ -n "$response" ]; then
+                      echo "ClickHouse Keeper responded but not ready yet (responded: $response)"
+                    else
+                      echo "ClickHouse Keeper is not responding or not available yet"
+                    fi
+                    
+                    sleep $interval
+                    elapsed=$((elapsed + interval))
+                  done
+                  
+                  echo "Timeout waiting for ClickHouse Keeper to be ready and healthy"
+                  echo "ClickHouse Keeper at $keeper_host:$keeper_port did not respond with 'imok' within ${timeout} seconds"
+                  exit 1
+              {{- if .Values.clickhouse.initContainers.waitForKeeper.resources }}
+              resources:
+              {{- toYaml .Values.clickhouse.initContainers.waitForKeeper.resources | nindent 16 }}
+              {{- end }}
+          {{- end }}
+          containers:
+            - name: clickhouse-pod
+              imagePullPolicy: {{ .Values.clickhouse.image.imagePullPolicy }}
+              image: {{ .Values.clickhouse.image.registry }}/{{ .Values.clickhouse.image.repository }}:{{ .Values.clickhouse.image.tag }}
+              {{- if .Values.clickhouse.extraEnvVars }}
+              env:
+              {{- toYaml .Values.clickhouse.extraEnvVars | nindent 16 }}
+              {{- end }}
+              {{- if .Values.clickhouse.resources }}
+              resources:
+              {{- toYaml .Values.clickhouse.resources | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: clickhouse-data-volume
+                  mountPath: /var/lib/clickhouse
+                - name: custom-functions-volume
+                  mountPath: /etc/clickhouse-server/functions
+                - name: shared-binary-volume
+                  mountPath: /var/lib/clickhouse/user_scripts
+    volumeClaimTemplates:
+      - name: clickhouse-data-volume
+        reclaimPolicy: {{ .Values.clickhouse.storage.reclaimPolicy }}
+        spec:
+          storageClassName: {{ .Values.clickhouse.storage.storageClass | default "default" }}
+          accessModes:
+          {{- toYaml .Values.clickhouse.storage.accessModes | nindent 12 }}
+          resources:
+            requests:
+              storage: {{ .Values.clickhouse.storage.pvcStorage }}
+    serviceTemplates:
+      - name: {{ $ch_server_name }}-svc
+        generateName: {{ .Values.clickhouse.clusterName }}-ep
+        metadata:
+          annotations:
+            {{- include "clickhouse-server.annotations" . | nindent 12}}
+          labels:
+            {{- include "clickhouse-server.labels" . | nindent 12 }}
+        spec:
+          type: {{ .Values.clickhouse.service.type }}
+          {{- include "clickhouse-server.service-ports" . | nindent 10 }}

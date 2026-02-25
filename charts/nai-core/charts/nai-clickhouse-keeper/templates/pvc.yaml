@@ -1,0 +1,22 @@
+{{- if eq .Values.clickhouseKeeper.storage.reclaimPolicy "Delete" }}
+{{- $replica_count := (.Values.clickhouseKeeper.replicas) | int }}
+{{ $ch_keeper_name := include "clickhouse-keeper.name" . }}
+{{ $ch_cluster_name := (.Values.clickhouseKeeper.clusterName) }}
+{{- range $i := until $replica_count }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "keeper-datadir-volume-chk-%s-%s-0-%d-0" $ch_keeper_name $ch_cluster_name $i }}
+  labels: {{- include "clickhouse-keeper.labels" $ | nindent 4 }}
+  annotations: {{- include "clickhouse-keeper.annotations" $ | nindent 4}}
+  namespace: {{ template "clickhouse-keeper.namespace" $ }}
+spec:
+  accessModes:
+  {{- toYaml $.Values.clickhouseKeeper.storage.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ $.Values.clickhouseKeeper.storage.pvcStorage }}
+  storageClassName: {{ $.Values.clickhouseKeeper.storage.storageClass | default "default" }}
+---
+{{- end }}
+{{- end }}

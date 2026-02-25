@@ -1,0 +1,18 @@
+{{- if .Values.naiAIGateway.enabled }}
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: nai-backend
+  namespace: nai-admin
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  schema:
+    name: OpenAI
+    version: /enterpriseai/v1
+  backendRef:
+    name: nai-backend
+    kind: Backend
+    group: gateway.envoyproxy.io
+{{- end }}

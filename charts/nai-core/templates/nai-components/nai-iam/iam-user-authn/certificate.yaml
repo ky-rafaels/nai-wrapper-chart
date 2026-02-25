@@ -1,0 +1,34 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-user-authn-tls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-user-authn
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: iam-user-authn-tls-cert
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  commonName: iam-user-authn
+  dnsNames:
+  - iam-user-authn
+  - iam-user-authn.{{ .Release.Namespace }}.svc.cluster.local
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  # TODO review this certificate
+  name: saml-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-iam-user-authn
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: saml-ca.local
+  secretName: saml-key-pair
+  issuerRef:
+    name: selfsigned-root
+    kind: Issuer

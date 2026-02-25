@@ -1,0 +1,43 @@
+# All NAI UI traffic is served under the /nai path prefix and routed through oauth2-proxy
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nai-ui-httproute
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-ui
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: nai-ingress-gateway
+  rules:
+    - matches: # Redirect root path to /nai
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /nai
+            statusCode: 301
+    - matches: # NAI UI
+        - path:
+            type: PathPrefix
+            value: /nai
+      backendRefs:
+        - name: nai-oauth2-proxy
+          namespace: {{ .Release.Namespace }}
+          port: 80
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - name: X-Frame-Options
+                value: SAMEORIGIN
+              - name: Content-Security-Policy
+                value: >-
+                  default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self';

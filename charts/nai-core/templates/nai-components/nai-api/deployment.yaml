@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nai-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: nai-api
+  template:
+    metadata:
+      labels:
+        app: nai-api
+        app.kubernetes.io/component: nai-api
+        {{- include "nai-core.labels" . | nindent 8 }}
+    spec:
+      initContainers:
+      - name: nai-api-prechecks
+        image: {{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}
+        resources:
+          {{- toYaml .Values.naiApi.naiMigrateInitContainerResources | nindent 10 }}
+        command: ["sh", "-c", "/scripts/pre-check.sh"]
+        envFrom:
+          - secretRef:
+              name: nai-db-creds
+        volumeMounts:
+          - name: precheck-volume
+            mountPath: /scripts
+          - name: nai-api-config-volume
+            mountPath: /etc/config/nai
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+          - name: nai-db-certs-volume
+            mountPath: /etc/ssl/certs
+            readOnly: true
+        {{- end }}
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+      containers:
+      - name: nai-api
+        image: {{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}
+        resources:
+          {{- toYaml .Values.naiApi.naiApiResources | nindent 10 }}
+        command: ["./nai-iep", "run", "--c", "/etc/config/nai/config.json", "--m", "/etc/config/nai/model_config.json"]
+        ports:
+        - containerPort: 7000
+        - containerPort: 8080
+        env:
+          - name: IAM_OIDC_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: {{ index .Values "oauth2-proxy" "config" "existingSecret" }}
+                key: client-id
+        envFrom:
+        # Can but updated only through reloading pod
+          - secretRef:
+              name: nai-db-creds
+          - secretRef:
+              name: nai-clickhouse-creds
+          - secretRef:
+              name: nai-default-user
+          - configMapRef:
+              name: nai-storage-config
+        volumeMounts:
+          - name: nai-api-config-volume
+            mountPath: /etc/config/nai
+        {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+          - name: nai-db-certs-volume
+            mountPath: /etc/ssl/certs
+            readOnly: true
+        {{- end }}
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+      serviceAccountName: nai-api-sa
+      volumes:
+      # Updates config file during runtime as well
+        - name: nai-api-config-volume
+          configMap:
+            name: nai-api-config
+        - name: precheck-volume
+          configMap:
+            name: nai-api-prechecks
+            defaultMode: 0755
+      {{- if or (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-full") (eq .Values.naiDatabase.postgresql.postgresSSLMode "verify-ca") }}
+        - name: nai-db-certs-volume
+          secret:
+            secretName: {{ .Values.naiDatabase.postgresql.postgresSSLSecretName }}
+            defaultMode: 420
+      {{- end }}

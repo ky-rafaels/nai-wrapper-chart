@@ -1,0 +1,1134 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nai-api-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  # For security, it is recommended to set the value of "lockout_duration" to 60 minutes
+  config.json: |
+    {
+      "environment": "development",
+      "logger": {
+        "log_level": "{{ .Values.naiApi.logger.logLevel }}",
+        "log_max_size": 100,
+        "log_max_backups": 5,
+        "log_max_age": 30,
+        "log_compress": true,
+        "filepath": "root.log"
+      },
+      "iam": {
+        "iam_https_host": "https://iam-proxy.{{ .Release.Namespace }}.svc.cluster.local:443"
+      },
+      "nai_admin_image_pull_secret": "{{ .Values.imagePullSecret.name }}",
+      "nai_db_creds_ref": "nai-db-creds",
+      "nai_api_config_volume_config_map_ref": "nai-api-config",
+      "nai_api_image": "{{ .Values.naiApi.naiApiImage.image }}:{{ .Values.naiApi.naiApiImage.tag }}",
+      "nai_api_sa": "nai-api-sa",
+      "nai_storage_config": "nai-storage-config",
+      "restore":{
+        "max_model_wait_retries": 10
+      },
+      "gateway_mode": {{ .Values.naiAIGateway.enabled }},
+      "rsyslog_audit_logs_export": {
+        "image": "{{ .Values.naiMonitoring.opentelemetry.collectorImage}}",
+        "resources": {
+          "cpu_requests": "{{ .Values.naiMonitoring.opentelemetry.rsyslogAuditLogsExport.resources.requests.cpu }}",
+          "memory_requests": "{{ .Values.naiMonitoring.opentelemetry.rsyslogAuditLogsExport.resources.requests.memory }}",
+          "cpu_limits": "{{ .Values.naiMonitoring.opentelemetry.rsyslogAuditLogsExport.resources.limits.cpu }}",
+          "memory_limits": "{{ .Values.naiMonitoring.opentelemetry.rsyslogAuditLogsExport.resources.limits.memory }}",
+          "pvc_size": "{{ .Values.naiMonitoring.opentelemetry.rsyslogAuditLogsExport.storageSpec.resources.requests.storage }}"
+        }
+      }
+    }
+  model_config.json: |
+    {
+        "nai-version": "v2.5.0",
+        "createdBy": "system",
+        "kserveHFTransformersImage": "{{ .Values.naiApi.supportedKserveRuntimeImage }}:{{ .Values.naiApi.supportedKserveGPURuntimeImageTag }}",
+        "kserveHFTransformersCPUImage": "{{ .Values.naiApi.supportedKserveRuntimeImage }}:{{ .Values.naiApi.supportedKserveCPURuntimeImageTag }}",
+        "vllmImage": "{{ .Values.naiApi.supportedVLLMImage }}:{{ .Values.naiApi.supportedVLLMGPUImageTag }}",
+        "vllmCPUImage": "{{ .Values.naiApi.supportedVLLMImage }}:{{ .Values.naiApi.supportedVLLMCPUImageTag }}",
+        "kserveCustomModelServerImage": "{{ .Values.naiApi.supportedKserveCustomModelServerRuntimeImage }}:{{ .Values.naiApi.supportedKserveCustomModelServerRuntimeImageTag }}",
+        "tgiImage": "{{ .Values.naiApi.supportedTGIImage }}:{{ .Values.naiApi.supportedTGIImageTag }}",
+        "models": [
+            {
+                "catalog": {
+                    "modelName": "google/gemma-2-9b-it",
+                    "modelRevision": "11c9b309abf73637e4b6f9a3fa1e92e615547819",
+                    "modelType": "Text Generation",
+                    "sourceHub": "HuggingFace",
+                    "description": "google gemma-2 9B instruct model",
+                    "contextLength": 4096,
+                    "tokenRequired": true,
+                    "modelSizeInGB": 20,
+                    "license": "gemma Community license",
+                    "developer": "Google",
+                    "modelUrl": "https://hf.co/google/gemma-2-9b-it",
+                    "quantization": "float16",
+                    "validated": true,
+                    "runtimes": [
+                        {
+                            "name": "vllm",
+                            "modelCapabilities": [
+                                "text-to-text"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 8,
+                                    "ram": 16,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 20,
+                                        "perGPUTextActivationsPerToken": 23894,
+                                        "sharedTextActivationsPerToken": 127432,
+                                        "kvCachePerToken": 382294,
+                                        "samplerMemPerNumSeq": 10240000
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                },
+                                "intel-amx-cpu": {
+                                    "resources": {
+                                        "cpu": 16,
+                                        "ram": 34,
+                                        "acceleratorMemory": {}
+                                    }
+                                },
+                                "cpu": {
+                                    "resources": {
+                                        "cpu": 16,
+                                        "ram": 34,
+                                        "acceleratorMemory": {}
+                                    }
+                                },
+                                "nvidia-vgpu": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                },
+                                "nvidia-mig": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                }
+                            }
+                        },
+                        {
+                            "name": "tgi",
+                            "modelCapabilities": [
+                                "text-to-text"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 4,
+                                    "ram": 8,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 20,
+                                        "perGPUTextActivationsPerToken": 151326,
+                                        "sharedTextActivationsPerToken": 0,
+                                        "kvCachePerToken": 382294
+                                    }
+                                },
+                                "additionalProperties": {
+                                    "tgiGPUConfig": {
+                                        "NVIDIA-A100-80GB-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A100-SXM4-80GB": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A10G": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 1024
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 4096
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A16": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A2": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 1024
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 4096
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 4096
+                                            }
+                                        ],
+                                        "NVIDIA-A30": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 1024
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 4096
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-B200": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-80GB-HBM3": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-NVL": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-L4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 1024
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 4096
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-L40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-L40S": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "Tesla-T4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ]
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {}
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "catalog": {
+                    "modelName": "google/gemma-2-2b-it",
+                    "modelRevision": "299a8560bedf22ed1c72a8a11e7dce4a7f9f51f8",
+                    "modelType": "Text Generation",
+                    "sourceHub": "HuggingFace",
+                    "description": "google gemma-2 2B instruct model",
+                    "contextLength": 4096,
+                    "tokenRequired": true,
+                    "modelSizeInGB": 10,
+                    "license": "gemma Community license",
+                    "developer": "Google",
+                    "modelUrl": "https://hf.co/google/gemma-2-2b-it",
+                    "quantization": "float16",
+                    "validated": true,
+                    "runtimes": [
+                        {
+                            "name": "vllm",
+                            "modelCapabilities": [
+                                "text-to-text"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 8,
+                                    "ram": 16,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 6,
+                                        "perGPUTextActivationsPerToken": 15360,
+                                        "sharedTextActivationsPerToken": 81920,
+                                        "kvCachePerToken": 118329,
+                                        "samplerMemPerNumSeq": 10240000
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                },
+                                "intel-amx-cpu": {
+                                    "resources": {
+                                        "cpu": 16,
+                                        "ram": 20,
+                                        "acceleratorMemory": {}
+                                    }
+                                },
+                                "cpu": {
+                                    "resources": {
+                                        "cpu": 16,
+                                        "ram": 20,
+                                        "acceleratorMemory": {}
+                                    }
+                                },
+                                "nvidia-vgpu": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                },
+                                "nvidia-mig": {
+                                    "image": "{{ .Values.naiApi.supportedVLLMImage }}:v0.8.5-gpu"
+                                }
+                            }
+                        },
+                        {
+                            "name": "tgi",
+                            "modelCapabilities": [
+                                "text-to-text"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 4,
+                                    "ram": 8,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 6,
+                                        "perGPUTextActivationsPerToken": 97280,
+                                        "sharedTextActivationsPerToken": 0,
+                                        "kvCachePerToken": 118329
+                                    }
+                                },
+                                "additionalProperties": {
+                                    "tgiGPUConfig": {
+                                        "NVIDIA-A100-80GB-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A100-SXM4-80GB": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A10G": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A16": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A2": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A30": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-A40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-B200": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-80GB-HBM3": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-H100-NVL": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-L4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 4096
+                                            }
+                                        ],
+                                        "NVIDIA-L40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "NVIDIA-L40S": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 8192
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 8192
+                                            }
+                                        ],
+                                        "Tesla-T4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ]
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {}
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "catalog": {
+                    "modelName": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+                    "modelRevision": "7dab2f5f854fe665b6b2f1eccbd3c48e5f627ad8",
+                    "modelType": "Vision",
+                    "sourceHub": "HuggingFace",
+                    "description": "Llama 4 Scout 17B 16E Instruct model",
+                    "contextLength": 10485760,
+                    "tokenRequired": true,
+                    "modelSizeInGB": 250,
+                    "license": "Llama-4 Community license",
+                    "developer": "Meta",
+                    "modelUrl": "https://hf.co/meta-llama/Llama-4-Scout-17B-16E-Instruct",
+                    "quantization": "bfloat16",
+                    "validated": true,
+                    "runtimes": [
+                        {
+                            "name": "vllm",
+                            "modelCapabilities": [
+                                "text-to-text",
+                                "image-to-text",
+                                "tool-calling"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 8,
+                                    "ram": 16,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 225,
+                                        "perGPUTextActivationsPerToken": 145636,
+                                        "sharedTextActivationsPerToken": 34134,
+                                        "kvCachePerToken": 218454,
+                                        "samplerMemPerNumSeq": 8081920,
+                                        "multimodalActivations": 174729387,
+                                        "tokensPerMmItem": 2467
+                                    }
+                                },
+                                "additionalProperties": {
+                                    "additionalArgs": {
+                                        "vllmArgs": {
+                                            "enforceEager": true,
+                                            "limitMMPerPrompt": 1,
+                                            "maxNumSeqs": 1,
+                                            "enableToolCalling": true,
+                                            "toolCallParser": "llama3_json",
+                                            "customArgs": {
+                                                "override-generation-config": "{\"attn_temperature_tuning\":true}",
+                                                "dtype": "bfloat16"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {},
+                                "nvidia-vgpu": {},
+                                "nvidia-mig": {}
+                            }
+                        },
+                        {
+                            "name": "tgi",
+                            "modelCapabilities": [
+                                "image-to-text",
+                                "text-to-text"
+                            ],
+                            "baseConfigs": {
+                                "resources": {
+                                    "cpu": 4,
+                                    "ram": 8,
+                                    "acceleratorMemory": {
+                                        "modelWeights": 225,
+                                        "perGPUTextActivationsPerToken": 179770,
+                                        "sharedTextActivationsPerToken": 0,
+                                        "kvCachePerToken": 218454
+                                    }
+                                },
+                                "additionalProperties": {
+                                    "tgiGPUConfig": {
+                                        "NVIDIA-A100-80GB-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 16384
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-A100-SXM4-80GB": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 16384
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-A10G": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ],
+                                        "NVIDIA-A16": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 16384
+                                            }
+                                        ],
+                                        "NVIDIA-A2": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ],
+                                        "NVIDIA-A30": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ],
+                                        "NVIDIA-A40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 16384
+                                            }
+                                        ],
+                                        "NVIDIA-B200": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 32768
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-H100-PCIe": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 32768
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-H100-80GB-HBM3": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 32768
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-H100-NVL": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 32768
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 65536
+                                            }
+                                        ],
+                                        "NVIDIA-L4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ],
+                                        "NVIDIA-L40": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 16384
+                                            }
+                                        ],
+                                        "NVIDIA-L40S": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": 0
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": 16384
+                                            }
+                                        ],
+                                        "Tesla-T4": [
+                                            {
+                                                "gpuCount": 1,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 2,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 4,
+                                                "contextLength": -1
+                                            },
+                                            {
+                                                "gpuCount": 8,
+                                                "contextLength": -1
+                                            }
+                                        ]
+                                    }
+                                }
+                            },
+                            "supportedPlatforms": {
+                                "nvidia-gpu-passthrough": {
+                                    "image": "{{ .Values.naiApi.supportedTGIImage }}:3.2.3-10d65dc"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }

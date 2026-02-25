@@ -1,0 +1,18 @@
+# By default, Envoy Gateway sets the buffer limit to 32kiB which is not sufficient for AI workloads.
+# This ClientTrafficPolicy sets the buffer limit to 50MiB as an example.
+{{- if .Values.naiAIGateway.enabled }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: client-buffer-limit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: nai-ingress-gateway
+  connection:
+    bufferLimit: 50Mi
+{{- end }}

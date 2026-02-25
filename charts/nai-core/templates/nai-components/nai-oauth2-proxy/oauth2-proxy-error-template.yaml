@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-error-template
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  error.html: |
+    {{`{{define "error.html"}}`}}
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{`{{.StatusCode}}`}} - Session Expired</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+          }
+
+          .error-container {
+            text-align: center;
+            max-width: 500px;
+            padding: 40px 20px;
+          }
+
+          .error-code {
+            font-size: 60px;
+            font-weight: 300;
+            margin-bottom: 20px;
+            line-height: 1;
+          }
+
+          .error-title {
+            font-size: 24px;
+            font-weight: 400;
+            margin-bottom: 12px;
+          }
+
+          .error-message {
+            font-size: 16px;
+            margin-bottom: 10px;
+            line-height: 1.5;
+            padding-bottom: 6px;
+          }
+
+          .error-description {
+            font-size: 16px;
+            color: #999;
+            line-height: 1.5;
+          }
+
+          .back-button {
+            background-color: #1b6dc6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+          }
+
+          .back-button:hover {
+            background-color: #155a9c;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="error-container">
+          <div class="error-code">{{`{{.StatusCode}}`}}</div>
+          <div class="error-title">Session Expired</div>
+          <div class="error-message">
+            Your session has expired. Please login again.
+          </div>
+          <a href="#" class="back-button" onclick="goBack()">Back to login</a>
+        </div>
+
+        <script>
+          function goBack() {
+            window.location.href =
+              "{{`{{.ProxyPrefix}}`}}/sign_out?rd=/api/iam/authn/v1/oidc/logout?post_logout_redirect_uri=/nai";
+          }
+
+          setTimeout(goBack, 3000);
+        </script>
+      </body>
+    </html>
+    {{`{{end}}`}}

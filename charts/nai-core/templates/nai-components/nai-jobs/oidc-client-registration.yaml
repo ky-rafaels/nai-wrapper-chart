@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nai-oidc-client-registration-{{ randAlphaNum 5 | lower }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 15
+  template:
+    spec:
+      containers:
+        - name: oidc-client-registration
+          image: {{ .Values.naiJobs.naiJobsImage.image }}:{{ .Values.naiJobs.naiJobsImage.tag }}
+          resources:
+            {{- toYaml .Values.naiJobs.resources | nindent 12 }}
+          command: ["python", "-m", "handlers", "register-iam-oidc-client", "--iam-host", "https://iam-proxy.{{ .Release.Namespace }}.svc.cluster.local:8445", "--iam-cert-dir", "/etc/ssl/certs"]
+          env:
+            - name: IAM_OIDC_CLIENT_SECRET_NAME
+              value: {{ index .Values "oauth2-proxy" "config" "existingSecret" }}
+            # Pass a new client name while restoring the backup
+            - name: IAM_OIDC_CLIENT_NAME
+              value: "nai-oidc-client"
+          volumeMounts:
+            - name: nai-jobs-iam-proxy-mtls-cert
+              mountPath: /etc/ssl/certs
+              readOnly: true
+      volumes:
+        - name: nai-jobs-iam-proxy-mtls-cert
+          secret:
+            secretName: nai-jobs-iam-proxy-mtls-cert
+            defaultMode: 420
+      serviceAccountName: nai-jobs-sa
+      restartPolicy: OnFailure

@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: iam-proxy-control-plane-tls-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: iam-proxy-control-plane
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  secretName: iam-proxy-control-plane-tls-cert
+  issuerRef:
+    name: ca-issuer
+    kind: Issuer
+  commonName: iam-proxy-control-plane
+  dnsNames:
+  - iam-proxy-control-plane
+  - iam-proxy-control-plane.{{ .Release.Namespace }}.svc.cluster.local

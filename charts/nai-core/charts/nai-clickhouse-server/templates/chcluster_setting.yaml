@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ch-cluster-settings
+  labels:
+    {{- include "clickhouse-server.labels" . | nindent 4 }}
+  annotations:
+    {{- include "clickhouse-server.annotations" . | nindent 4}}
+  namespace: {{ template "clickhouse-server.namespace" . }}
+data:
+  shards: "{{ .Values.clickhouse.shards }}"
+  replicas: "{{ .Values.clickhouse.replicas }}"

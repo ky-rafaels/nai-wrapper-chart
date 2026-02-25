@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:  
+  name: nai-api-prechecks
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+data:
+  pre-check.sh: |-
+    # Run migration check
+    ./nai-iep migrate check --c /etc/config/nai/config.json --m /etc/config/nai/model_config.json
+
+    # Run ClickHouse check
+    echo "\nRunning ClickHouse check...."
+    until wget -q --spider --timeout=2 http://chcluster1-ep:8123/ping 2>/dev/null; do
+      echo "ClickHouse is not ready yet. Waiting..."
+      sleep 3
+    done
+    echo "ClickHouse is ready!"

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nai-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    nai-monitoring: nai-prometheus
+    app.kubernetes.io/component: nai-api
+    {{- include "nai-core.labels" . | nindent 4 }}
+spec:
+  ports:
+  - name: apiport
+    port: 7000
+    targetPort: 7000
+  - name: metricsport
+    port: 8080
+    targetPort: 8080
+  # This port is used for inter-service communication and is not exposed to the gateway
+  - name: inter-service-api-port
+    port: 7002
+    targetPort: 7002
+  {{- if .Values.naiAIGateway.enabled }}
+  - name: extauthport
+    port: 7001
+    targetPort: 7001
+  {{- end }}
+  selector:
+    app: nai-api

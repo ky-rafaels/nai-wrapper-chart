@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: iam-proxy
+    app.kubernetes.io/component: nai-iam-proxy
+    {{- include "nai-core.labels" . | nindent 4 }}
+  name: iam-proxy
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iam-proxy
+  template:
+    metadata:
+      labels:
+        app: iam-proxy
+    spec:
+      serviceAccountName: nai-iam-sa
+      containers:
+      - name: iam-proxy
+        image: {{ .Values.naiIam.iamProxy.image }}:{{ .Values.naiIam.iamProxy.tag }}
+        resources:
+          {{- toYaml .Values.naiIam.iamProxyResources | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: api-http
+          containerPort: 8448
+        - name: https
+          containerPort: 8443
+        - name: cac
+          containerPort: 9441
+        - name: mtls
+          containerPort: 8445
+        - name: sa-mtls
+          containerPort: 9442
+        - name: admin
+          containerPort: 8001
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 2
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 2
+        env:
+        - name: ENVOY_DEPLOYMENT_TYPE
+          value: "gcp"
+        # - name: DOMAIN
+        #   valueFrom:
+        #     configMapKeyRef:
+        #       name: iam-proxy-config
+        #       key: domain
+        volumeMounts:
+        - mountPath: /etc/envoy
+          name: iam-proxy-bootstrap-config-vol
+          readOnly: true
+        - mountPath: /etc/downstream_tls_secrets
+          name: iam-proxy-downstream-tls-vol
+          readOnly: true
+        - mountPath: /etc/mtls_secrets
+          name: iam-proxy-mutual-tls-vol
+          readOnly: true
+        - mountPath: /etc/upstream_tls_secrets
+          name: iam-proxy-upstream-tls-vol
+          readOnly: true
+      volumes:
+      - name: iam-proxy-bootstrap-config-vol
+        configMap:
+          name: iam-proxy-bootstrap-config
+      - name: iam-proxy-downstream-tls-vol
+        secret:
+          secretName: iam-proxy-downstream-tls
+          # defaultMode: 384 # this will give 0600 permission octal to decimal
+      - name: iam-proxy-mutual-tls-vol
+        secret:
+          secretName: iam-proxy-mutual-tls-cert
+          # defaultMode: 384 # this will give 0600 permission octal to decimal
+      - name: iam-proxy-upstream-tls-vol
+        secret:
+          secretName: iam-proxy-upstream-tls-cert
+          # defaultMode: 384 # this will give 0600 permission octal to decimal
