@@ -9,11 +9,11 @@ spec:
     kubernetes:
       envoyDeployment:
         pod:
-          {{- if .Values.gatewayHelm.global.imagePullSecrets }}
+          {{- if index .Values "gateway-helm" "global" "imagePullSecrets" }}
           imagePullSecrets:
-            {{- range .Values.gatewayHelm.global.imagePullSecrets }}
+            {{- range index .Values "gateway-helm" "global" "imagePullSecrets" }}
             - name: {{ .name }}
           {{- end }}
           {{- end }}
         container:
-          image: "{{ .Values.global.repository }}/{{ .Values.gatewayHelm.global.images.naiProxy.image }}"
+          image: {{ index .Values "global" "repository" }}/{{ index .Values "gateway-helm" "global" "images" "naiProxy" "image" }}
