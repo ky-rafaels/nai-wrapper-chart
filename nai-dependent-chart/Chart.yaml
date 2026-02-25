@@ -25,16 +25,16 @@ appVersion: "2.5.0"
 dependencies:
   - name: gateway-crds-helm
     version: v1.5.1
-    repository: oci://docker.io/envoyproxy/gateway-crds-helm
+    repository: oci://docker.io/envoyproxy
   - name: gateway-helm
     version: v1.5.1
-    repository: oci://docker.io/envoyproxy/gateway-helm
+    repository: oci://docker.io/envoyproxy
   - name: kserve
     version: v0.15.0
-    repository: oci://ghcr.io/kserve/charts/kserve
-  - name: kserve-crds
+    repository: oci://ghcr.io/kserve/charts
+  - name: kserve-crd
     version: v0.15.0
-    repository: oci://ghcr.io/kserve/charts/kserve-crd
+    repository: oci://ghcr.io/kserve/charts
   - name: opentelemetry-operator
     version: 0.93.0
     repository: https://open-telemetry.github.io/opentelemetry-helm-charts
