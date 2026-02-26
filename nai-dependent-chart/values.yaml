@@ -1,5 +1,4 @@
 global:
-  repository: "harbor.example.com/nutanix"
   nkpWorkspaceNamespace: "nai-system"
 gateway-crds-helm:
   crds:
@@ -8,22 +7,26 @@ gateway-crds-helm:
     envoyGateway:
       enabled: true
 gateway-helm:
+  deployment:
+    envoyGateway:
+      image:
+        repository: "harbor.example.com/nutanix/nai-gateway"
+        tag: "v1.5.0"
   global:
     images:
-      envoyGateway:
-        image: "nai-gateway:v1.5.0"
       naiProxy: 
-        image: "nai-envoy:distroless-v1.35.0"
+        image: "harbor.example.com/nutanix/nai-envoy:distroless-v1.35.0"
       ratelimit: 
-        image: "nai-ratelimit:3e085e5b"
+        image: "harbor.example.com/nutanix/nai-ratelimit:3e085e5b"
     imagePullSecrets:
       - name: regcred
 kserve:
-  controller:
-    deploymentMode: RawDeployment
-    gateway:
-      disableIngressCreation: true
-    image: "nai-kserve-controller"
-    rbacProxyImage: "nai-kserve-rbac-proxy:v0.18.0"
-    imagePullSecrets:
-      - name: regcred
+  kserve:
+    controller:
+      deploymentMode: RawDeployment
+      gateway:
+        disableIngressCreation: true
+      image: "harbor.example.com/nutanix/nai-kserve-controller"
+      rbacProxyImage: "harbor.example.com/nutanix/nai-kserve-rbac-proxy:v0.18.0"
+      imagePullSecrets:
+        - name: regcred

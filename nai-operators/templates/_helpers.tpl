@@ -18,3 +18,14 @@ app.kubernetes.io/part-of: {{ .Chart.Name | quote }}
 {{- printf "{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"%s\",\"auth\":\"%s\"}}}" .registry .username .password .email (printf "%s:%s" .username .password | b64enc) | b64enc }}
 {{- end }}
 {{- end }}
+
+{{- define "common.image" -}}
+{{-   $prefix := .Values.global.repository | default "" -}}
+{{-   $img := .repository | default .repo | required "image repository is required" -}}
+{{-   $tag  := .tag | default "latest" -}}
+{{-   if $prefix -}}
+  {{- printf "%s/%s:%s" $prefix $img $tag | quote -}}
+{{- else -}}
+  {{- printf "%s:%s" $img $tag | quote -}}
+{{- end -}}
+{{- end -}}

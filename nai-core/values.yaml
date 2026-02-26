@@ -1,4 +1,6 @@
 # Labels common to add components of nai-core
+global:
+  imageRegistry: "harbor.example.com/nutanix"
 labels:
   app.kubernetes.io/name: nai-iep
 
