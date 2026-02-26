@@ -22,26 +22,42 @@ Update custom values
 ```bash
 cat << EOF > custom-values.yaml
 global:
-  repository: "harbor.example.com/nutanix"
   nkpWorkspaceNamespace: "nai-system"
-gatewayCrdsHelm:
+gateway-crds-helm:
   crds:
     gatewayAPI:
       enabled: true
     envoyGateway:
       enabled: true
-gatewayHelm:
+gateway-helm:
+  deployment:
+    envoyGateway:
+      image:
+        repository: "harbor.example.com/nutanix/nai-gateway"
+        tag: "v1.5.0"
   global:
+    images:
+      naiProxy: 
+        image: "harbor.example.com/nutanix/nai-envoy:distroless-v1.35.0"
+      ratelimit: 
+        image: "harbor.example.com/nutanix/nai-ratelimit:3e085e5b"
     imagePullSecrets:
       - name: regcred
 kserve:
-  controller:
-    deploymentMode: RawDeployment
-    gateway:
-      disableIngressCreation: true
-    image: "nai-kserve-controller"
-    rbacProxyImage: "nai-kserve-rbac-proxy:v0.18.0"
-    imagePullSecrets:
-      - name: regcred
+  kserve:
+    controller:
+      deploymentMode: RawDeployment
+      gateway:
+        disableIngressCreation: true
+      image: "harbor.example.com/nutanix/nai-kserve-controller"
+      rbacProxyImage: "harbor.example.com/nutanix/nai-kserve-rbac-proxy:v0.18.0"
+      imagePullSecrets:
+        - name: regcred
 EOF
+```
+
+Then install
+
+```bash
+helm upgrade --install nai-dependencies --create-namespace ./nai-dependent-chart
 ```
