@@ -1,0 +1,11 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: nai-easy-install
+  namespace: flux-system
+spec:
+  interval: 10m
+  url: https://github.com/ky-rafaels/nai-easy-install 
+  ref:
+    branch: main
