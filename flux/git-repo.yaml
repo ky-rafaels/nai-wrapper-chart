@@ -6,6 +6,6 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  url: https://github.com/ky-rafaels/nai-easy-install 
+  url: https://github.com/ky-rafaels/nai-wrapper-chart
   ref:
     branch: main
